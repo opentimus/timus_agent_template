@@ -1,0 +1,38 @@
+# Carly 演示语义包：通用最小可用示例（两表：客户 / 订单）。
+# 自检与单测跑在这份文件上；替换为真实应用时，把 team_code 与表单标识换成真实值，
+# 并同步 tests/pkg_config.py 的 APP_CODE / SCHEMA_FILE / REQUIRED_TABLES。
+
+schema_version: "1.0.0"
+team_code: 00.GENERIC.DEMO
+connector: timus-runtime
+
+type_policy:
+  AutoNumber: read_only
+  CreatedTime: read_only
+  Lookup: read_only
+  User: read_only
+  Formula: read_only
+  Text: writable
+  Number: writable
+  SingleSelect: writable
+  DateTime: writable
+
+tables:
+  客户: tblDemoCustomer0001
+  订单: tblDemoOrder000002
+
+fields:
+  客户:
+    S.客户ID: AutoNumber
+    S.客户: Text
+    S.联系方式: Text
+    S.状态: SingleSelect
+    S.备注: Text
+  订单:
+    S.订单号: Text
+    S.客户ID: Text
+    S.客户: Lookup
+    S.金额: Number
+    S.下单时间: DateTime
+    S.状态: SingleSelect
+    S.备注: Text

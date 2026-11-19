@@ -1,0 +1,36 @@
+# <应用名> 语义包（Carly 通用模板）
+
+填写说明：把 `team_code` / `tables` / `fields` 换成目标 Timus 应用的真实配置，本文件即成该应用的唯一字段来源。
+格式是**受限 YAML 子集**：仅顶层键、2 空格缩进键值、4 空格缩进字段键值，不支持列表语法、锚点与跨行结构。
+`schema_lib.py` 把行内第一个 `#` 视为注释起点，值中不能出现井号字面量；解析器只接受 `key: value` 行，
+因此**模板正文只能以 `#` 注释形式存在**（下面整段都是注释，取消注释前先确认格式）。
+
+校验清单：
+- `team_code` / `tables` / `fields` 三段表名集合必须一致。
+- 每个字段的类型必须出现在 `type_policy` 中，`type_policy` 段不要删条目。
+- 字段名逐字保留平台前缀（多数应用为 `S.`）；同一应用内不同表的前缀差异是平台实况，照抄不统一。
+- 表单标识 `tbl...` 只用于追溯，禁止出现在任何工具参数里。
+
+# schema_version: "1.0.0"
+# team_code: <APP_CODE>
+# connector: timus-runtime
+#
+# 表单清单（2 空格缩进）
+# tables:
+#   表A: tblXXXXXXXXXXXXXXXX
+#   表B: tblYYYYYYYYYYYYYYYY
+#
+# 字段清单（表名 2 空格、字段 4 空格）
+# fields:
+#   表A:
+#     S.主键ID: AutoNumber
+#     S.名称: Text
+#     S.状态: SingleSelect
+#     S.备注: Text
+#   表B:
+#     S.单号: Text
+#     S.外键ID: Text
+#     S.关联名称: Lookup
+#     S.数量: Number
+#     S.发生时间: DateTime
+#     S.备注: Text

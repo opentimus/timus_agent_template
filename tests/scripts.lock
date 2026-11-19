@@ -1,0 +1,9 @@
+{
+  "package": "1.0.0",
+  "files": {
+    "schema_lib.py": "8b7ef7e2a0af8e3312c694927b3090b65d93e60490777ee46fb64b73709b1f28",
+    "resolve_schema.py": "c9e559019da25810bf4e517521625673cce69db42b4b74250a052a2313ff2bdf",
+    "point_util.py": "cbb8bcfec1a15eed912772f3ecdba1cd66cd5fcc95d307e3e2195dc6a9ecb42d",
+    "date_util.py": "721d6a02e1a6633c68f7baca1efea2e8c88c0ef87ddd67983fec74d6b14fdcdc"
+  }
+}

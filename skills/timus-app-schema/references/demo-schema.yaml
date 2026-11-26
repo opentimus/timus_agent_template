@@ -1,6 +1,5 @@
 # Carly 演示语义包：通用最小可用示例（两表：客户 / 订单）。
-# 自检与单测跑在这份文件上；替换为真实应用时，把 team_code 与表单标识换成真实值，
-# 并同步 tests/pkg_config.py 的 APP_CODE / SCHEMA_FILE / REQUIRED_TABLES。
+# 替换为真实应用时，把 team_code 与表单标识换成真实值。
 
 schema_version: "1.0.0"
 team_code: 00.GENERIC.DEMO

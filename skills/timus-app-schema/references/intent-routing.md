@@ -6,26 +6,23 @@
 
 | 动词族 | 动作 | 技能 |
 | --- | --- | --- |
-| 建 / 新增 / 录入 / 建档 / 加 / 提交 / 登记 | 新建 | `record-create-form` |
-| 查 / 搜 / 列出 / 详情 / 看一下 / 有多少 | 查询 | `record-maintenance` |
-| 改 / 修改 / 更新 / 修正 / 改成 / 设置为 / 改状态 | 修改 | `record-maintenance` |
-| 删 / 删除 / 移除 / 删掉 / 清掉 | 删除 | `record-maintenance`（二次确认） |
+| 查 / 搜 / 列出 / 详情 / 看一下 / 有多少 | 查询 | `timus-app-maintenance` |
+| 改 / 修改 / 更新 / 修正 / 改成 / 设置为 / 改状态 | 修改 | `timus-app-maintenance` |
+| 删 / 删除 / 移除 / 删掉 / 清掉 | 删除 | `timus-app-maintenance` |
 
-含糊（如「处理一下这条记录」）先弹选择框选动作。「记一笔 / 登记一笔」属新建。
+含糊（如「处理一下这条记录」）先弹选择框选动作。
 
 ## 关键词映射（通用骨架）
 
 | 用户关键词 | 技能 | 去向 |
 | --- | --- | --- |
-| 建 / 新增 / 录入 / 创建 / 提交 + 表名 | `record-create-form` | 语义包围表匹配 |
-| 批量建 / 一次录多条 / 批量导入 | `record-create-form` | 多行模式（无强序依赖） |
-| 查 / 搜 / 列出 / 详情 / 看一下 + 表名 | `record-maintenance` | `apaas_page_records` / `apaas_get_record` |
-| 改 / 更新 / 修正 / 改状态 | `record-maintenance` | `apaas_edit_record`（唯一 + 确认） |
-| 删 / 移除 / 清掉 | `record-maintenance` | `apaas_delete_record`（唯一 + 二次确认，不可撤销） |
+| 查 / 搜 / 列出 / 详情 / 看一下 + 表名 | `timus-app-maintenance` | `data_tool.py --table` / `--where` |
+| 改 / 更新 / 修正 / 改状态 | `timus-app-maintenance` | `data_tool.py --set`（唯一 + 确认） |
+| 删 / 移除 / 清掉 | `timus-app-maintenance` | `data_tool.py --delete`（唯一定位） |
 
 ## 表定位规则
 
-按语义包 `tables` 表单名匹配：
+按表头元数据 `tables` 表单名匹配：
 
 1. 完全同名 → 命中。
 2. 用户词为表名子串（如「流水」→「收入流水」）且唯一命中 → 命中。
@@ -34,6 +31,6 @@
 
 ## 能力边界
 
-- 写入仅覆盖语义包登记的表与字段；表不在包内先提示，不扩展。
-- 语义包未填真实字段（仍为占位符）→ 禁写入；先索取应用编码与字段清单，落盘后操作。
+- 写入仅覆盖表头元数据登记的表与字段；取值先查本地基础数据，未命中再远程。
+- 表头元数据或基础数据未填真实值（仍为占位符）→ 禁写入；先索取应用编码与字段清单，落盘后操作。
 - 分析结论不冒充写入；查询结果足够时只回报，不臆造写回。

@@ -1,5 +1,5 @@
 # 语义包：表头元数据 + 本地记录。换应用时改 apps 下的应用名（即 app_name）/ tables / fields；tbl... 仅追溯。
-# 层级：apps → 应用名(app_name) → tables + fields + records；字段写作 类型@策略，省略策略取 type_policy 默认；members 为成员快照，open_id 是 User 写入值。
+# 层级：apps → 应用名(app_name) → tables + fields + records；字段写作 类型@策略，省略策略取 type_policy 默认；records 下为 表 → 记录 ID → 字段: 值，User 字段值为 open_id。
 
 schema_version: "1.0.0"
 connector: timus-runtime
@@ -36,33 +36,32 @@ apps:
         S.截止时间: DateTime@writable
     records:
       团队成员:
+        reczz28bx2V8LHcd:
+          S.成员ID: TCF-001
+          S.成员: 左左
+          S.角色: 财务
+          S.用户: "on_00000000000000000000000000000001"
+        reczz28bx2V8PfnY:
+          S.成员ID: TCF-002
+          S.成员: Barry
+          S.角色: 质量
+          S.用户: "on_00000000000000000000000000000002"
+        reczz28bx2V8Sb29:
+          S.成员ID: TCF-003
+          S.成员: 飞书用户1446NF
+          S.角色: 客服
+          S.用户: "on_00000000000000000000000000000003"
+        reczz28bx2V8QIIp:
+          S.成员ID: TCF-004
+          S.成员: 王臻
+          S.角色: 商务
+          S.用户: "on_00000000000000000000000000000004"
+        reczz28bx2V8PRQ3:
+          S.成员ID: TCF-005
+          S.成员: 蒋彦博
+          S.角色: 咨询
+          S.用户: "on_00000000000000000000000000000005"
       成员任务:
-    members:
-      - member_id: TCF-001
-        member: 左左
-        role: 财务
-        open_id: "on_00000000000000000000000000000001"
-        record_id: reczz28bx2V8LHcd
-      - member_id: TCF-002
-        member: Barry
-        role: 质量
-        open_id: "on_00000000000000000000000000000002"
-        record_id: reczz28bx2V8PfnY
-      - member_id: TCF-003
-        member: 飞书用户1446NF
-        role: 客服
-        open_id: "on_00000000000000000000000000000003"
-        record_id: reczz28bx2V8Sb29
-      - member_id: TCF-004
-        member: 王臻
-        role: 商务
-        open_id: "on_00000000000000000000000000000004"
-        record_id: reczz28bx2V8QIIp
-      - member_id: TCF-005
-        member: 蒋彦博
-        role: 咨询
-        open_id: "on_00000000000000000000000000000005"
-        record_id: reczz28bx2V8PRQ3
   TODO_APP_B:
     tables:
       客户: tblDemoCustomer0001

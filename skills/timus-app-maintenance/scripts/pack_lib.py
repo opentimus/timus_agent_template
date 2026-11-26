@@ -1,4 +1,4 @@
-"""语义包解析：单文件含表头元数据与本地记录；受限 YAML（2 空格缩进，无列表 / 锚点，members 跳过）。"""
+"""语义包解析：单文件含表头元数据与本地记录；受限 YAML（2 空格缩进，无列表 / 锚点）。"""
 from __future__ import annotations
 
 from collections.abc import Iterator
@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import NamedTuple, cast
 
 SECTION_KEYS = ("type_policy", "apps")
-APP_KEYS = ("tables", "fields", "records", "members")
+APP_KEYS = ("tables", "fields", "records")
 VALID_POLICIES = ("read_only", "writable")
 
 
@@ -95,38 +95,33 @@ class LineState(NamedTuple):
     subsection: str
     table: str
     record: str
-    skip: bool
 
 
 def iter_lines(lines: list[str]) -> Iterator[LineState]:
-    """逐行产出缩进状态；section ∈ {meta, type_policy, apps}，members 整块跳过。"""
+    """逐行产出缩进状态；section ∈ {meta, type_policy, apps}，空行与注释 section 为空。"""
     section = app = subsection = table = record = ""
-    skip = False
     for lineno, raw in enumerate(lines, start=1):
         line = clean_line(raw)
         if not line.strip():
-            yield LineState(lineno, raw, -1, "", "", "", "", "", "", "", True)
+            yield LineState(lineno, raw, -1, "", "", "", "", "", "", "")
             continue
         indent = len(line) - len(line.lstrip(" "))
         key, value = split_pair(line.strip(), lineno)
         if indent == 0:
             section = key if key in SECTION_KEYS else "meta"
             app = subsection = table = record = ""
-            skip = False
         elif section == "apps":
             if indent == 2:
                 app, subsection, table, record = key, "", "", ""
-                skip = False
             elif indent == 4:
                 subsection = key if key in APP_KEYS else ""
                 table = record = ""
-                skip = key == "members"
-            elif not skip and subsection in ("tables", "fields", "records"):
+            elif subsection in ("tables", "fields", "records"):
                 if indent == 6:
                     table, record = key, ""
                 elif indent == 8 and subsection == "records":
                     record = key
-        yield LineState(lineno, raw, indent, key, value, section, app, subsection, table, record, skip)
+        yield LineState(lineno, raw, indent, key, value, section, app, subsection, table, record)
 
 
 def load_pack(path: str) -> dict[str, object]:
@@ -146,7 +141,7 @@ def load_pack(path: str) -> dict[str, object]:
                 if s.value not in VALID_POLICIES:
                     raise PackError("第 {} 行类型 {} 的策略必须是 read_only 或 writable".format(s.lineno, s.key))
                 _put(type_policy, s.key, s.value, s.lineno)
-        elif s.section == "apps" and not s.skip:
+        elif s.section == "apps":
             item: dict[str, object]
             if s.indent == 2:
                 if s.value:

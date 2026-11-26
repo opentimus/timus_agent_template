@@ -2,13 +2,18 @@
 
 复制后只换语义包与人设；通用代码和契约不动。表名、字段名、关联、固定值从语义包推导；必填 / 选填由创建类型技能定义。
 
+技能按 `应用-表-动作` 命名，例如 `todo-member-add`；实例技能在宿主层直接映射到脚本，固化 `--app` / `--table` / `--pack`，不读 `SKILL.md`。模板保留 `timus-app-*` 通用名。
+
+`type_policy` 仅为字段默认策略；用户可手动调整字段的 `@策略`，以最终配置为准。
+
 ## 权威源
 
 | 主题 | 权威源 |
 | --- | --- |
 | 字段 / 类型 / 可写性 / 本地记录 | `skills/timus-app-maintenance/references/timus-team.yaml` |
 | 意图路由与定位 | `skills/timus-app-maintenance/references/intent-routing.md` |
-| 数值 / 日期 / 采集 / 写入流程 | `skills/timus-app-maintenance/SKILL.md` |
+| 脚本命令与返回约定 | `skills/timus-app-maintenance/SKILL.md` |
+| 脚本参数 | 各脚本 `-h` |
 | 原则与边界 | `agents/general-timus-expert.md` |
 
 ## 目录

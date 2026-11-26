@@ -67,12 +67,34 @@ def query(pack: dict[str, object], app: str, table: str, where: list[str], field
     return result
 
 
-def mutate(path: str, pack: dict[str, object], app: str, table: str, record: str, sets: list[str], delete: bool) -> dict[str, object]:
+def _locate_record(rows: dict[str, dict[str, str]], where: list[str], known: set[str]) -> str:
+    if not where:
+        raise DataError("缺少 --record 和 --where，无法定位记录")
+    conditions: list[tuple[str, str]] = []
+    for raw in where:
+        if "=" not in raw:
+            raise DataError("--where 格式应为 字段=值：{}".format(raw))
+        name, value = raw.split("=", 1)
+        name = name.strip()
+        if name not in known:
+            raise DataError("字段 {} 不在表头元数据中".format(name))
+        conditions.append((name, value.strip()))
+    hits = [rid for rid, row in rows.items() if all(row.get(name) == value for name, value in conditions)]
+    if not hits:
+        raise DataError("未找到匹配记录")
+    if len(hits) > 1:
+        raise DataError("匹配到 {} 条记录，请补条件或给 --record".format(len(hits)))
+    return hits[0]
+
+
+def mutate(path: str, pack: dict[str, object], app: str, table: str, record: str, sets: list[str], delete: bool, where: list[str]) -> dict[str, object]:
     a = resolve_app(pack, app)
     t = resolve_table(pack, a, table)
     _ensure_writable(a)
     rows = _records(pack, a, t)
-    if record not in rows:
+    if not record:
+        record = _locate_record(rows, where, _known(pack, a, t))
+    elif record not in rows:
         raise DataError("应用 {} 的表 {} 中不存在记录：{}。可用记录：{}".format(a, t, record, ", ".join(rows)))
 
     changes: dict[str, str] = {}
@@ -92,7 +114,7 @@ def mutate(path: str, pack: dict[str, object], app: str, table: str, record: str
     out: list[str] = []
     applied: dict[str, str] = {}
     for s in iter_lines(Path(path).read_text(encoding="utf-8").splitlines()):
-        if s.section != "apps" or s.skip or s.app != a or s.table != t or s.subsection != "records":
+        if s.section != "apps" or s.app != a or s.table != t or s.subsection != "records":
             out.append(s.raw)
             continue
         if s.indent == 8 and delete and s.record == record:
@@ -129,7 +151,7 @@ def _next_ids(existing: dict[str, dict[str, str]], count: int, prefix: str = "re
 def _data_insert_position(lines: list[str], app: str, table: str) -> int:
     position: int | None = None
     for s in iter_lines(lines):
-        if s.section == "apps" and not s.skip and s.app == app and s.subsection == "records" and s.table == table:
+        if s.section == "apps" and s.app == app and s.subsection == "records" and s.table == table:
             if s.indent in (6, 8, 10):
                 position = s.lineno
     if position is None:
@@ -193,8 +215,8 @@ def main() -> None:
     parser.add_argument("--list-tables", action="store_true", help="列出表与记录数；带 --app 时只列该应用")
     parser.add_argument("--app", default="", help="应用名")
     parser.add_argument("--table", default="", help="表名")
-    parser.add_argument("--record", default="", help="记录 ID（改 / 删必填）")
-    parser.add_argument("--where", action="append", default=[], metavar="字段=值", help="过滤条件，可重复，AND")
+    parser.add_argument("--record", default="", help="记录 ID；改 / 删不传时用 --where 定位唯一记录")
+    parser.add_argument("--where", action="append", default=[], metavar="字段=值", help="过滤条件，可重复，AND；改 / 删不传 --record 时用于定位")
     parser.add_argument("--fields", action="append", nargs="+", default=[], metavar="字段", help="返回字段，可多值 / 重复")
     parser.add_argument("--set", dest="sets", action="append", nargs="+", default=[], metavar="字段=值", help="改字段，可多值 / 重复")
     parser.add_argument("--delete", action="store_true", help="删除指定记录")
@@ -233,9 +255,7 @@ def main() -> None:
         if not args.table:
             raise DataError("需要 --table 指定该应用下的表")
         if args.delete or sets:
-            if not args.record:
-                raise DataError("改 / 删需要 --record 指定记录 ID")
-            result = mutate(args.pack, pack, args.app, args.table, args.record, sets, args.delete)
+            result = mutate(args.pack, pack, args.app, args.table, args.record, sets, args.delete, args.where)
         else:
             a = resolve_app(pack, args.app)
             records = query(pack, a, args.table, args.where, fields)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import sys
 from pathlib import Path
@@ -35,10 +36,10 @@ def main() -> int:
         return 2
 
     data = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
-    html = template.replace("__TITLE__", str(payload["title"])).replace("__DATA_JSON__", data)
+    page = template.replace("__TITLE__", html.escape(str(payload["title"]))).replace("__DATA_JSON__", data)
     output = Path(args.output).expanduser().resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(html, encoding="utf-8")
+    output.write_text(page, encoding="utf-8")
     print("已生成 {}（{} 行）".format(output, len(rows)))
     return 0
 

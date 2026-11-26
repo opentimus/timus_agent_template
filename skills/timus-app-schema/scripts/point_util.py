@@ -1,21 +1,5 @@
 #!/usr/bin/env python3
-"""数值口径工具：点数归一化、总点拆分、流水号派生（Python 3 标准库，零第三方依赖）。
-
-数值口径是两包共用的业务规则，集中在此脚本，助手不再心算：
-- normalize：正数、两位小数、四舍五入半进（Decimal ROUND_HALF_UP），拒绝负数 / 0 / 科学计数法；
-- split：把总点 T 按权重拆到 N 条，每条两位小数且 Σ 严格等于 T，逐项校验 ≥ 0.01；
-- next-pair：给出一条主号与尾号（末位 +1）的流水号对，两份共用同一毫秒前缀；
-- next-batch：一条毫秒前缀 + 序号后缀的流水号批次（`-01`、`-02`…）。
-
-输出一律 JSON（ensure_ascii=False）；校验失败打印中文原因到 stderr 并以 exit 2 退出。
-
-用法：
-  python3 point_util.py normalize 6.567
-  python3 point_util.py split --total 3 --weight 1 --weight 2
-  python3 point_util.py split --total 6 --weight 1 --weight 1 --weight 1   # 均分即权重全 1
-  python3 point_util.py next-pair --prefix TIN
-  python3 point_util.py next-batch --prefix TPAY --count 3
-"""
+"""数值口径：normalize 两位小数、split 按权重拆分（Σ 严格相等）、next-pair / next-batch 流水号。纯标准库，stdout JSON，失败 stderr 中文原因 + exit 2。用法见 timus-app-schema/SKILL.md。"""
 
 from __future__ import annotations
 
@@ -39,24 +23,30 @@ class PointError(Exception):
 def _check_prefix(prefix: str) -> str:
     name = (prefix or "").strip().upper()
     if not re.fullmatch(r"[A-Z]+", name):
-        raise PointError("前缀须为纯字母（如 TIN / TPAY），收到：{}".format(prefix))
+        raise PointError("前缀须为纯字母，收到：{}".format(prefix))
     return name
 
 
-def normalize(raw: str) -> dict[str, object]:
-    """把任意合法正数输入归一化为两位小数口径。"""
+def _decimal_cents(raw: str) -> Decimal:
+    """校验并归一化到分，返回 Decimal。"""
     text = (raw or "").strip()
     if not text:
         raise PointError("点数不能为空")
     if not RAW_PATTERN.fullmatch(text):
         raise PointError("点数须为正数（可带小数，不接受符号或科学计数法）：{}".format(raw))
     try:
-        value = Decimal(text)
-        cents = value.quantize(CENT, rounding=ROUND_HALF_UP)
+        cents = Decimal(text).quantize(CENT, rounding=ROUND_HALF_UP)
     except InvalidOperation:
         raise PointError("点数不是有效数值或超出可处理范围：{}".format(raw))
     if cents <= 0:
         raise PointError("点数必须大于 0，收到：{}".format(raw))
+    return cents
+
+
+def normalize(raw: str) -> dict[str, object]:
+    """把任意合法正数输入归一化为两位小数口径。"""
+    text = (raw or "").strip()
+    cents = _decimal_cents(raw)
     return {
         "raw": text,
         "value": float(cents),
@@ -67,8 +57,8 @@ def normalize(raw: str) -> dict[str, object]:
 
 def split(total: str, weights: list[str]) -> dict[str, object]:
     """把总点 T 按权重拆到 N 条：两位小数、Σ = T、逐项 ≥ 0.01。"""
-    head = normalize(total)
-    total_cents = Decimal(head["cents"]) / 100
+    total_cents = _decimal_cents(total)
+    total_int = int((total_cents * 100).to_integral_value())
     if not weights:
         raise PointError("split 至少需要一个 --weight")
 
@@ -85,8 +75,7 @@ def split(total: str, weights: list[str]) -> dict[str, object]:
         share = (total_cents * weight / weight_sum).quantize(CENT, rounding=ROUND_HALF_UP)
         items.append({"index": index, "weight": weight, "cents": int((share * 100).to_integral_value())})
 
-    # 尾差全部调整到最后一条，保证 Σ 严格等于 T
-    tail_diff = int((total_cents * 100).to_integral_value()) - sum(int(i["cents"]) for i in items)
+    tail_diff = total_int - sum(int(i["cents"]) for i in items)
     items[-1]["cents"] = int(items[-1]["cents"]) + tail_diff
 
     for item in items:
@@ -100,12 +89,10 @@ def split(total: str, weights: list[str]) -> dict[str, object]:
         item["text"] = "{:.2f}".format(cents / 100)
 
     total_out = sum(int(i["cents"]) for i in items)
-    if total_out != int(head["cents"]):
-        raise PointError("拆分合计 {} 与总估点 {} 不一致".format(total_out, head["cents"]))
 
     return {
         "total": float(total_cents),
-        "total_text": head["text"],
+        "total_text": "{:.2f}".format(total_cents),
         "count": len(items),
         "sum": "{:.2f}".format(total_out / 100),
         "items": items,
@@ -149,10 +136,10 @@ def main() -> None:
     spl.add_argument("--weight", action="append", default=[], metavar="W", help="各条权重（正整数），可重复；均分即每条权重 1")
 
     pair = sub.add_parser("next-pair", help="生成一对相邻流水号")
-    pair.add_argument("--prefix", required=True, help="前缀，如 TIN / TPAY")
+    pair.add_argument("--prefix", required=True, help="前缀（纯字母）")
 
     batch = sub.add_parser("next-batch", help="生成同毫秒的流水号批次")
-    batch.add_argument("--prefix", required=True, help="前缀，如 TIN / TPAY")
+    batch.add_argument("--prefix", required=True, help="前缀（纯字母）")
     batch.add_argument("--count", type=int, required=True, help="条数")
 
     args = parser.parse_args()

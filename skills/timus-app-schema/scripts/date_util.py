@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
-"""启动日期选项与任务起止日期计算（Python 3 标准库，零第三方依赖）。
-
-- options：以基准日（默认今天）为第 1 天，列出后 10 个日期及星期；
-- batch：一次换算多条任务的起止日期；
-- single：校验完成日期并换算「今天 -> 完成日期」的 DateTime。
-
-「第 N 天」按 1 基计数：第 1 天 = 启动日期当天，第 N 天 = 启动日期 + (N-1) 天。
-DateTime 输出为 YYYY-MM-DD HH:mm:ss；服务端传纯日期或 T 分隔会报解析错误。
-"""
+"""日期口径：options 候选 / batch 多条任务起止 / single 今日→完成日。「第 N 天」1 基计数，DateTime 输出 YYYY-MM-DD HH:mm:ss。纯标准库，stdout JSON。"""
 
 from __future__ import annotations
 
@@ -42,15 +34,16 @@ def _nth_day(base: date, n: int) -> date:
 
 
 def _options(base: date, count: int) -> list[dict[str, object]]:
-    return [
-        {
+    out: list[dict[str, object]] = []
+    for index in range(count):
+        day = base + timedelta(days=index)
+        out.append({
             "day_index": index + 1,
-            "date": _fmt(base + timedelta(days=index)),
-            "weekday": WEEKDAY_CN[(base + timedelta(days=index)).weekday()],
-            "label": _label(base + timedelta(days=index)),
-        }
-        for index in range(count)
-    ]
+            "date": _fmt(day),
+            "weekday": WEEKDAY_CN[day.weekday()],
+            "label": _label(day),
+        })
+    return out
 
 
 def _range_payload(base: date, start_day: int, end_day: int) -> dict[str, object]:

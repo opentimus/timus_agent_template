@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
-"""离线知识库：构建索引 + 章节加权 BM25 检索。纯标准库，无联网。"""
+"""离线知识库：从源文档分块 + 章节加权 BM25 检索。纯标准库，无联网。"""
 from __future__ import annotations
 
-import json
 import math
 import re
 from pathlib import Path
 
 K1 = 1.5
 B = 0.75
-HEADING_WEIGHT = 1.0
 TOKEN_RE = re.compile(r"[\u4e00-\u9fff]+|[A-Za-z]+|\d+(?:\.\d+)?")
 END_RE = re.compile(r"[。！？；。）\">]$")
 
@@ -34,8 +32,8 @@ def _counts(tokens: list[str]) -> dict[str, int]:
     return counts
 
 
-def build(source: Path) -> dict:
-    """一次性分块并建索引。"""
+def build(source: Path) -> list[dict]:
+    """读 Markdown 分块，返回带词频的 chunk 列表。"""
     chunks: list[dict] = []
     chapter = section = pending = ""
 
@@ -46,15 +44,13 @@ def build(source: Path) -> dict:
         if not text:
             return
         body = tokenize(text)
-        heading = tokenize((chapter + " " + section).strip())
         chunks.append({
             "chapter": chapter,
             "section": section,
             "text": text,
             "tf": _counts(body),
-            "htf": _counts(heading),
+            "htf": _counts(tokenize((chapter + " " + section).strip())),
             "len": len(body),
-            "hlen": len(heading),
         })
 
     for raw in source.read_text(encoding="utf-8").splitlines():
@@ -68,7 +64,7 @@ def build(source: Path) -> dict:
         if not line or line.startswith("![") or re.match(r"^（[^）]*）$", line) or line.startswith(("责任编辑", "责任校对")):
             flush()
             continue
-        if len(line) < 6 and not line.startswith("【"):
+        if not TOKEN_RE.search(line) and not line.startswith("【"):
             continue
         if line.startswith("【") and "】" in line:
             flush()
@@ -79,60 +75,39 @@ def build(source: Path) -> dict:
             flush()
         pending = pending + line if pending else line
     flush()
+    return chunks
 
+
+def search(chunks: list[dict], query: str, top_k: int = 3) -> list[dict]:
+    """检索：返回按相关度降序的证据块。"""
+    terms = set(tokenize(query))
+    if not terms or not chunks:
+        return []
+    n = len(chunks)
+    avgdl = sum(c["len"] for c in chunks) / n
     df: dict[str, int] = {}
     for chunk in chunks:
         for token in chunk["tf"]:
             df[token] = df.get(token, 0) + 1
-    n = len(chunks)
-    return {
-        "version": 1,
-        "source": source.name,
-        "config": {"k1": K1, "b": B, "heading_weight": HEADING_WEIGHT},
-        "n": n,
-        "avgdl": sum(c["len"] for c in chunks) / n if n else 0.0,
-        "df": df,
-        "chunks": chunks,
-    }
 
-
-def _bm25(tf: dict[str, int], length: float, df: dict[str, int], n: int,
-          avgdl: float, terms: set[str], k1: float, b: float) -> float:
-    if not length or not avgdl:
-        return 0.0
-    score = 0.0
-    for term in terms:
-        freq = tf.get(term, 0)
-        if not freq:
+    scored: list[dict] = []
+    for chunk in chunks:
+        score = 0.0
+        for term in terms:
+            freq = chunk["tf"].get(term, 0)
+            if not freq:
+                continue
+            doc_freq = df.get(term, 0)
+            idf = math.log(1 + (n - doc_freq + 0.5) / (doc_freq + 0.5))
+            score += idf * freq * (K1 + 1) / (freq + K1 * (1 - B + B * chunk["len"] / avgdl))
+        if not score:
             continue
-        doc_freq = df.get(term, 0)
-        idf = math.log(1 + (n - doc_freq + 0.5) / (doc_freq + 0.5))
-        score += idf * freq * (k1 + 1) / (freq + k1 * (1 - b + b * length / avgdl))
-    return score
-
-
-def search(index: dict, query: str, top_k: int = 3) -> list[dict]:
-    """运行期检索：返回按相关度降序的证据块。"""
-    terms = set(tokenize(query))
-    if not terms or not index["chunks"]:
-        return []
-    cfg = index["config"]
-    k1, b, hw = cfg["k1"], cfg["b"], cfg["heading_weight"]
-    n, avgdl = index["n"], index["avgdl"]
-    scored = []
-    for rank, chunk in enumerate(index["chunks"]):
-        body = _bm25(chunk["tf"], chunk["len"], index["df"], n, avgdl, terms, k1, b)
-        if not body:
-            continue
-        overlap = len(terms & chunk["htf"].keys()) / len(terms)
-        score = body * (1 + hw * overlap)
-        if score > 0:
-            scored.append({
-                "rank": rank,
-                "score": round(score, 4),
-                "chapter": chunk["chapter"],
-                "section": chunk["section"],
-                "text": chunk["text"],
-            })
+        score *= 1 + len(terms & chunk["htf"].keys()) / len(terms)
+        scored.append({
+            "score": round(score, 4),
+            "chapter": chunk["chapter"],
+            "section": chunk["section"],
+            "text": chunk["text"],
+        })
     scored.sort(key=lambda item: item["score"], reverse=True)
     return scored[:top_k]

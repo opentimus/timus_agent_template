@@ -1,10 +1,4 @@
-"""Timus 语义包解析（Python 3 标准库，零第三方依赖）。
-
-仅支持 references/timus-team-schema.yaml 使用的受限 YAML 子集：
-顶层键、2 空格缩进的键值、4 空格缩进的字段键值；不支持列表语法与锚点。
-
-_parse 辅助函数同时供同目录 data_tool.py / add_data.py 复用。
-"""
+"""表头元数据解析：仅支持顶层键 + 2/4 空格缩进的受限 YAML，不含列表与锚点。辅助函数供 data_tool.py 复用。"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -17,7 +11,7 @@ class SchemaError(Exception):
     """语义包格式不合法。"""
 
 
-def _clean_line(raw: str) -> str:
+def clean_line(raw: str) -> str:
     quote = ""
     for index, char in enumerate(raw):
         if quote:
@@ -30,21 +24,21 @@ def _clean_line(raw: str) -> str:
     return raw.rstrip()
 
 
-def _unquote(value: str) -> str:
+def unquote(value: str) -> str:
     value = value.strip()
     if len(value) >= 2 and value[0] == value[-1] and value[0] in ("\"", "'"):
         return value[1:-1]
     return value
 
 
-def _split_pair(line: str, lineno: int) -> tuple[str, str]:
+def split_pair(line: str, lineno: int) -> tuple[str, str]:
     if ":" not in line:
         raise SchemaError("第 {} 行缺少冒号：{}".format(lineno, line))
     key, _, value = line.partition(":")
-    key = _unquote(key.strip())
+    key = unquote(key.strip())
     if not key:
         raise SchemaError("第 {} 行的键为空".format(lineno))
-    return key, _unquote(value)
+    return key, unquote(value)
 
 
 def _put(mapping: dict[str, str], key: str, value: str, lineno: int) -> None:
@@ -67,14 +61,14 @@ def load_schema(path: str) -> dict[str, object]:
     current_table = ""
 
     for lineno, raw in enumerate(file.read_text(encoding="utf-8").splitlines(), start=1):
-        line = _clean_line(raw)
+        line = clean_line(raw)
         if not line.strip():
             continue
         indent = len(line) - len(line.lstrip(" "))
         text = line.strip()
 
         if indent == 0:
-            key, value = _split_pair(text, lineno)
+            key, value = split_pair(text, lineno)
             if key in SECTION_KEYS:
                 if value:
                     raise SchemaError("第 {} 行的块 {} 不应带值".format(lineno, key))
@@ -89,7 +83,7 @@ def load_schema(path: str) -> dict[str, object]:
         if not section:
             raise SchemaError("第 {} 行缩进内容没有所属块：{}".format(lineno, text))
 
-        key, value = _split_pair(text, lineno)
+        key, value = split_pair(text, lineno)
 
         if section == "type_policy":
             if indent != 2:
@@ -140,14 +134,9 @@ def load_schema(path: str) -> dict[str, object]:
 
 
 def list_fields(schema: dict[str, object], table: str) -> list[dict[str, object]]:
-    tables = schema["tables"]
-    if not isinstance(tables, dict) or table not in tables:
-        raise SchemaError("未知表单：{}。可用表单：{}".format(table or "(空)", ", ".join(tables)))
-    fields = schema["fields"]
-    policy = schema["type_policy"]
-    if not isinstance(fields, dict) or not isinstance(policy, dict):
-        raise SchemaError("语义包结构不完整")
+    if table not in schema["tables"]:
+        raise SchemaError("未知表单：{}。可用表单：{}".format(table or "(空)", ", ".join(schema["tables"])))
     return [
-        {"name": name, "type": field_type, "writable": policy.get(field_type) == "writable"}
-        for name, field_type in fields[table].items()
+        {"name": name, "type": field_type, "writable": schema["type_policy"].get(field_type) == "writable"}
+        for name, field_type in schema["fields"][table].items()
     ]

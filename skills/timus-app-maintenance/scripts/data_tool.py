@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""本地基础数据维护：查 / 改 / 删，原地改写受限 YAML。纯标准库。"""
+"""本地基础数据维护：查 / 改 / 删 / 追加，原地改写受限 YAML。纯标准库。"""
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
-from typing import Callable, cast
+from typing import Iterator, NamedTuple, cast
 
 SKILLS = Path(__file__).resolve().parents[2]
-SCHEMA_SCRIPTS = SKILLS / "timus-app-schema" / "scripts"
-sys.path.insert(0, str(SCHEMA_SCRIPTS))
+sys.path.insert(0, str(SKILLS / "timus-app-schema" / "scripts"))
 
-import schema_lib  # pyright: ignore[reportImplicitRelativeImport]
+from schema_lib import clean_line, list_fields, load_schema, split_pair, unquote, SchemaError  # pyright: ignore[reportImplicitRelativeImport]
 
 DEFAULT_DATA = SKILLS / "timus-app-schema" / "references" / "timus-team-data.yaml"
 DEFAULT_SCHEMA = SKILLS / "timus-app-schema" / "references" / "timus-team-schema.yaml"
@@ -22,107 +22,99 @@ class DataError(Exception):
     """基础数据格式或参数不合法。"""
 
 
-# 复用 schema_lib 的受限 YAML 解析辅助函数，避免两处实现漂移。
-_clean_line = cast(Callable[[str], str], schema_lib._clean_line)
-_unquote = cast(Callable[[str], str], schema_lib._unquote)
-_split_pair = cast(Callable[[str, int], tuple[str, str]], schema_lib._split_pair)
+Rows = dict[str, dict[str, dict[str, str]]]
+
+
+class LineState(NamedTuple):
+    lineno: int
+    raw: str
+    indent: int
+    key: str
+    value: str
+    section: str
+    table: str
+    record: str
+
+
+def walk(lines: list[str]) -> Iterator[LineState]:
+    """逐行产出缩进状态；section ∈ {meta, data, skip}，空白行不产出。"""
+    section = table = record = ""
+    for lineno, raw in enumerate(lines, start=1):
+        line = clean_line(raw)
+        if not line.strip():
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        key, value = split_pair(line.strip(), lineno)
+        if indent == 0:
+            section = "data" if key == "data" else ("meta" if value else "skip")
+            table = record = ""
+        elif section == "data":
+            if indent == 2:
+                table, record = key, ""
+            elif indent == 4:
+                record = key
+        yield LineState(lineno, raw, indent, key, value, section, table, record)
 
 
 def load_data(path: str) -> dict[str, object]:
+    """只读 meta 与 data 段；source / members 等其它顶层块整块忽略。"""
     file = Path(path).expanduser().resolve()
     if not file.is_file():
         raise DataError("找不到基础数据：{}".format(file))
     meta: dict[str, str] = {}
-    source: dict[str, str] = {}
-    members: list[dict[str, str]] = []
-    data: dict[str, dict[str, dict[str, str]]] = {}
-    section = table = record = ""
-    for lineno, raw in enumerate(file.read_text(encoding="utf-8").splitlines(), start=1):
-        line = _clean_line(raw)
-        if not line.strip():
-            continue
-        indent = len(line) - len(line.lstrip(" "))
-        text = line.strip()
-        if indent == 0:
-            key, value = _split_pair(text, lineno)
-            section = key if key in ("source", "members", "data") else ""
-            if not section:
-                if key in meta:
-                    raise DataError("第 {} 行重复键：{}".format(lineno, key))
-                meta[key] = value
-            elif value:
-                raise DataError("第 {} 行 {} 块不应带值".format(lineno, key))
-            table = record = ""
-            continue
-        if section == "source":
-            if indent != 2:
-                raise DataError("第 {} 行 source 缩进须为 2 空格".format(lineno))
-            key, value = _split_pair(text, lineno)
-            source[key] = value
-            continue
-        if section == "members":
-            if indent not in (2, 4):
-                raise DataError("第 {} 行 members 缩进须为 2/4 空格".format(lineno))
-            if indent == 2:
-                if not text.startswith("- "):
-                    raise DataError("第 {} 行成员须以 `- ` 开头：{}".format(lineno, text))
-                members.append({})
-            key, value = _split_pair(text[2:] if indent == 2 else text, lineno)
-            if not members:
-                raise DataError("第 {} 行字段没有所属成员".format(lineno))
-            members[-1][key] = value
-            continue
-        if section != "data":
-            raise DataError("第 {} 行缩进内容不属于已知块：{}".format(lineno, text))
-        key, value = _split_pair(text, lineno)
-        if indent == 2:
-            if value:
-                raise DataError("第 {} 行表名不应带值：{}".format(lineno, key))
-            if key in data:
-                raise DataError("第 {} 行重复表：{}".format(lineno, key))
-            data[key] = {}
-            table, record = key, ""
-        elif indent == 4:
-            if not table or value:
-                raise DataError("第 {} 行记录格式错误：{}".format(lineno, key))
-            if key in data[table]:
-                raise DataError("第 {} 行重复记录：{}".format(lineno, key))
-            data[table][key] = {}
-            record = key
-        elif indent == 6:
-            if not record:
-                raise DataError("第 {} 行字段没有所属记录：{}".format(lineno, key))
-            if not value:
-                raise DataError("第 {} 行字段缺少值：{}".format(lineno, key))
-            if key in data[table][record]:
-                raise DataError("第 {} 行重复字段：{}".format(lineno, key))
-            data[table][record][key] = value
-        else:
-            raise DataError("第 {} 行缩进须为 2/4/6 空格".format(lineno))
-    if not meta.get("team_code") or not members:
-        raise DataError("基础数据缺少 team_code 或 members 块")
-    for name, records in data.items():
-        if not records:
-            raise DataError("表 {} 无记录".format(name))
-    for index, member in enumerate(members, start=1):
-        for key in ("member_id", "member", "role", "open_id", "record_id"):
-            if not member.get(key):
-                raise DataError("第 {} 个成员缺少 {}（下划线命名）".format(index, key))
-    return {"meta": meta, "source": source, "members": members, "data": data}
+    data: Rows = {}
+    for s in walk(file.read_text(encoding="utf-8").splitlines()):
+        if s.section == "meta":
+            meta[s.key] = s.value
+        elif s.section == "data" and s.indent > 0:
+            if s.indent == 2:
+                if s.value:
+                    raise DataError("第 {} 行表名不应带值：{}".format(s.lineno, s.key))
+                if s.key in data:
+                    raise DataError("第 {} 行重复表：{}".format(s.lineno, s.key))
+                data[s.key] = {}
+            elif s.indent == 4:
+                if not s.table or s.value:
+                    raise DataError("第 {} 行记录格式错误：{}".format(s.lineno, s.key))
+                if s.key in data[s.table]:
+                    raise DataError("第 {} 行重复记录：{}".format(s.lineno, s.key))
+                data[s.table][s.key] = {}
+            elif s.indent == 6:
+                if not s.record:
+                    raise DataError("第 {} 行字段没有所属记录：{}".format(s.lineno, s.key))
+                if not s.value:
+                    raise DataError("第 {} 行字段缺少值：{}".format(s.lineno, s.key))
+                if s.key in data[s.table][s.record]:
+                    raise DataError("第 {} 行重复字段：{}".format(s.lineno, s.key))
+                data[s.table][s.record][s.key] = s.value
+            else:
+                raise DataError("第 {} 行缩进须为 2/4/6 空格".format(s.lineno))
+    if not meta.get("team_code"):
+        raise DataError("基础数据缺少 team_code")
+    return {"meta": meta, "data": data}
 
 
-def _known_fields(schema_path: str, table: str) -> set[str]:
-    schema = schema_lib.load_schema(schema_path)
+def known_fields(schema_path: str, table: str) -> set[str]:
+    try:
+        schema = load_schema(schema_path)
+    except SchemaError as err:
+        raise DataError(str(err)) from err
     if table not in schema["tables"]:
         raise DataError("表头元数据中不存在表：{}".format(table))
-    return {cast(str, item["name"]) for item in schema_lib.list_fields(schema, table)}
+    return {cast(str, item["name"]) for item in list_fields(schema, table)}
+
+
+def format_value(new_value: str) -> str:
+    if "#" in new_value or '"' in new_value or "'" in new_value:
+        raise DataError("值不能包含 # 或引号：{}".format(new_value))
+    return '"{}"'.format(new_value)
 
 
 def query(dataset: dict[str, object], table: str, where: list[str], fields: list[str], schema_path: str) -> list[dict[str, object]]:
-    data = cast(dict[str, dict[str, dict[str, str]]], dataset["data"])
+    data = cast(Rows, dataset["data"])
     if table not in data:
         raise DataError("未知表 {}。可用表：{}".format(table, ", ".join(data)))
-    known = _known_fields(schema_path, table)
+    known = known_fields(schema_path, table)
     conditions: list[tuple[str, str]] = []
     for raw in where:
         if "=" not in raw:
@@ -141,16 +133,10 @@ def query(dataset: dict[str, object], table: str, where: list[str], fields: list
     return result
 
 
-def _format_value(new_value: str) -> str:
-    if "#" in new_value or '"' in new_value or "'" in new_value:
-        raise DataError("值不能包含 # 或引号：{}".format(new_value))
-    return '"{}"'.format(new_value)
-
-
 def mutate(path: str, table: str, record: str, sets: list[str], delete: bool, schema_path: str) -> dict[str, object]:
     file = Path(path).expanduser().resolve()
     dataset = load_data(str(file))
-    data = cast(dict[str, dict[str, dict[str, str]]], dataset["data"])
+    data = cast(Rows, dataset["data"])
     if table not in data:
         raise DataError("未知表：{}。可用表：{}".format(table, ", ".join(data)))
     if record not in data[table]:
@@ -158,7 +144,7 @@ def mutate(path: str, table: str, record: str, sets: list[str], delete: bool, sc
 
     changes: dict[str, str] = {}
     if not delete:
-        known = _known_fields(schema_path, table)
+        known = known_fields(schema_path, table)
         for raw in sets:
             if "=" not in raw:
                 raise DataError("--set 格式应为 字段=值：{}".format(raw))
@@ -168,49 +154,26 @@ def mutate(path: str, table: str, record: str, sets: list[str], delete: bool, sc
                 raise DataError("字段 {} 不在表头元数据中：{}".format(name, table))
             if name not in data[table][record]:
                 raise DataError("记录 {} 中没有字段 {}，不可新增字段".format(record, name))
-            changes[name] = _format_value(value.strip())
+            changes[name] = format_value(value.strip())
 
-    original = file.read_text(encoding="utf-8").splitlines()
+    lines = file.read_text(encoding="utf-8").splitlines()
+    states = {s.lineno: s for s in walk(lines)}
     out: list[str] = []
-    section = current_table = current_record = ""
     applied: dict[str, str] = {}
-    for lineno, raw in enumerate(original, start=1):
-        line = _clean_line(raw)
-        if not line.strip():
+    for lineno, raw in enumerate(lines, start=1):
+        s = states.get(lineno)
+        if not s or s.section != "data" or s.indent <= 0:
             out.append(raw)
             continue
-        indent = len(line) - len(line.lstrip(" "))
-        text = line.strip()
-        if indent == 0:
-            key, _ = _split_pair(text, lineno)
-            section = "data" if key == "data" else ""
-            current_table = current_record = ""
-            out.append(raw)
+        if s.indent == 4 and delete and s.table == table and s.record == record:
             continue
-        if section != "data":
-            out.append(raw)
-            continue
-        key, _ = _split_pair(text, lineno)
-        if indent == 2:
-            current_table, current_record = key, ""
-            out.append(raw)
-            continue
-        if indent == 4:
-            current_record = key
-            if delete and current_table == table and key == record:
+        if s.indent == 6 and s.table == table and s.record == record:
+            if delete:
                 continue
-            out.append(raw)
-            continue
-        if indent == 6:
-            if current_table == table and current_record == record:
-                if delete:
-                    continue
-                if key in changes:
-                    out.append(raw[:raw.index(":")] + ": " + changes[key])
-                    applied[key] = _unquote(changes[key])
-                    continue
-            out.append(raw)
-            continue
+            if s.key in changes:
+                out.append(raw[:raw.index(":")] + ": " + changes[s.key])
+                applied[s.key] = unquote(changes[s.key])
+                continue
         out.append(raw)
 
     if not delete:
@@ -220,6 +183,81 @@ def mutate(path: str, table: str, record: str, sets: list[str], delete: bool, sc
     file.write_text("\n".join(out) + "\n", encoding="utf-8")
     return {"team_code": dataset["meta"]["team_code"], "table": table, "record": record,
             "deleted": delete, "changed": applied}
+
+
+def _next_ids(existing: Rows, table: str, count: int, prefix: str = "rec") -> list[str]:
+    """按已有记录的最大序号续编；新表用 prefix 作前缀。"""
+    names = list(existing.get(table, {}))
+    used = {int(m.group(1)) for name in names if (m := re.search(r"(\d+)$", name))}
+    number = max(used, default=0)
+    result: list[str] = []
+    while len(result) < count:
+        number += 1
+        if number not in used:
+            result.append("{}{:03d}".format(prefix, number))
+    return result
+
+
+def _data_insert_position(lines: list[str], table: str) -> tuple[int, bool]:
+    """返回 (插入行号, 表是否已存在)；无 data 段时返回文件末尾。"""
+    data_end: int | None = None
+    insert_at: int | None = None
+    seen_data = False
+    for s in walk(lines):
+        if s.section == "data":
+            seen_data = True
+            if s.indent == 0:
+                continue
+            data_end = s.lineno  # 1 基行号即该行之后的插入下标
+            if s.indent == 2 and s.key == table:
+                insert_at = s.lineno
+            elif insert_at is not None and s.indent in (4, 6) and s.table == table:
+                insert_at = s.lineno
+        elif seen_data and data_end is None:
+            data_end = s.lineno - 1
+    if insert_at is not None:
+        return insert_at, True
+    return (data_end if data_end is not None else len(lines)), False
+
+
+def append(path: str, schema: str, table: str, items: list[str]) -> dict[str, object]:
+    """按表追加记录；字段须在表头元数据中存在，记录 ID 自动生成。"""
+    file = Path(path).expanduser().resolve()
+    dataset = load_data(str(file))
+    data = cast(Rows, dataset["data"])
+    known = known_fields(schema, table)
+
+    rows: list[dict[str, str]] = []
+    for raw in items:
+        if "=" not in raw:
+            raise DataError("--set 格式应为 字段=值：{}".format(raw))
+        fields: dict[str, str] = {}
+        for pair in raw.split("|"):
+            if "=" not in pair:
+                raise DataError("字段格式应为 字段=值：{}".format(pair))
+            name, value = pair.split("=", 1)
+            name = name.strip()
+            if name not in known:
+                raise DataError("字段 {} 不在表头元数据中：{}".format(name, table))
+            fields[name] = format_value(value.strip())
+        rows.append(fields)
+
+    ids = _next_ids(data, table, len(rows))
+    rendered: list[str] = []
+    for record_id, fields in zip(ids, rows):
+        rendered.append("    {}:".format(record_id))
+        rendered.extend("      {}: {}".format(name, value) for name, value in fields.items())
+
+    lines = file.read_text(encoding="utf-8").splitlines()
+    position, exists = _data_insert_position(lines, table)
+    has_data = any(clean_line(line).strip() == "data:" for line in lines)
+    block = rendered if exists else ["  {}:".format(table)] + rendered
+    if not has_data:
+        block = ["", "data:"] + block
+        position = len(lines)
+    lines[position:position] = block
+    file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return {"team_code": dataset["meta"]["team_code"], "table": table, "added": len(rows), "records": ids}
 
 
 def main() -> None:
@@ -245,7 +283,7 @@ def main() -> None:
         dataset = load_data(args.data)
         meta = cast(dict[str, str], dataset["meta"])
         if args.list_tables:
-            data = cast(dict[str, dict[str, dict[str, str]]], dataset["data"])
+            data = cast(Rows, dataset["data"])
             tables = [{"name": name, "records": len(rows)} for name, rows in data.items()]
             print(json.dumps({"team_code": meta["team_code"], "tables": tables}, ensure_ascii=False, indent=2))
             return
@@ -262,7 +300,7 @@ def main() -> None:
             {"team_code": meta["team_code"], "table": args.table, "count": len(records), "records": records},
             ensure_ascii=False, indent=2,
         ))
-    except (DataError, schema_lib.SchemaError, OSError) as err:
+    except (DataError, OSError) as err:
         print("参数错误：{}".format(err), file=sys.stderr)
         sys.exit(2)
 

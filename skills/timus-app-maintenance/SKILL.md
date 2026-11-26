@@ -9,19 +9,11 @@ agent_created: true
 
 对本地基础数据做查 / 改 / 删；表名与字段名取自 `timus-app-schema` 的两类 schema。**不绑定具体实体**：表名、字段名、关键字段均由 schema 判定。
 
-本 Skill 是**行为层唯一权威源**：意图路由见 `references/intent-routing.md`；脚本契约见 `references/data-contract.md`。不生成 HTML、不启本地代理、浏览器不参与；对话采集，助手直调脚本。
+本 Skill 是**行为层唯一权威源**：意图路由见 `references/intent-routing.md`。不生成 HTML、不启本地代理、浏览器不参与；对话采集，助手直调脚本。
 
 ## 意图路由
 
-逐关键词映射以 `references/intent-routing.md` 为准；先判动作族，命中即动作，不确认动作类型。
-
-| 动作 | 用户关键词 | 执行 |
-| --- | --- | --- |
-| 查询 | 查 / 搜 / 列出 / 详情 / 看一下 | `data_tool.py --table` / `--where` / `--fields` |
-| 修改 | 改 / 更新 / 修正 / 改状态 | `data_tool.py --record --set` |
-| 删除 | 删 / 删除 / 移除 / 清掉 | `data_tool.py --record --delete` |
-
-意图含糊（如「处理一下这条记录」）先弹 `AskUserQuestion` 选动作，不猜测。
+动作族与逐关键词映射见 `references/intent-routing.md`（唯一权威源）；命中即执行，不确认动作类型。意图含糊（如「处理一下这条记录」）先弹 `AskUserQuestion` 选动作，不猜测。
 
 ## 信息类别与采集渠道
 
@@ -107,7 +99,7 @@ python3 <skill-dir>/scripts/data_tool.py --table <表名> --where "S.字段=值"
 - 同一条改 / 删不重复提交；查询可重试。
 - 禁伪造 `AskUserQuestion` 或工具名 / 参数；禁绕过连接器直连 REST、生成 HTML、启本地 HTTP 代理、浏览器参与写入。
 - 禁心算数值 / 单号、手拼日期；禁在脚本或输出写入真实令牌、地址或凭据。
-- 令牌存连接器：由 WorkBuddy 连接设置注入进程环境变量；不写入 HTML。HTML 若需令牌与域名，须放独立 `.js` 凭据文件，避免分享时被截取；不进包内文件、对话、命令行或日志。
+- 令牌存连接器，不进对话 / 命令行 / 日志；完整规范见 README「关于工具与连接器」。
 
 ## 示例
 
@@ -118,6 +110,5 @@ python3 <skill-dir>/scripts/data_tool.py --table <表名> --where "S.字段=值"
 ## 资源
 
 - `references/intent-routing.md`：意图 → 技能硬映射（行为路由权威源）。
-- `references/data-contract.md`：本地数据脚本契约与定位规则。
 - `skills/timus-app-schema/references/timus-team-schema.yaml`：表头元数据，表 / 字段 / 可写性唯一来源。
 - `skills/timus-app-schema/references/timus-team-data.yaml`：基础数据，本地业务块。

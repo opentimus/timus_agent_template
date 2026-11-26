@@ -1,18 +1,12 @@
 #!/usr/bin/env python3
 """启动日期选项与任务起止日期计算（Python 3 标准库，零第三方依赖）。
 
-供 task-create-form 技能使用：
 - options：以基准日（默认今天）为第 1 天，列出后 10 个日期及星期；
-- dates：按所选启动日期与「第几天开始 / 第几天结束」换算单条任务的起止日期；
-- batch：一次换算多条任务的起止日期，减少脚本调用轮次；
-- single：模式 B 自定义创建，校验所选完成日期并换算「今天 -> 完成日期」的 DateTime。
+- batch：一次换算多条任务的起止日期；
+- single：校验完成日期并换算「今天 -> 完成日期」的 DateTime。
 
 「第 N 天」按 1 基计数：第 1 天 = 启动日期当天，第 N 天 = 启动日期 + (N-1) 天。
-
-日期输出字段说明：
-- start_date / end_date：YYYY-MM-DD，向后兼容，用于展示；
-- start_datetime / end_datetime：YYYY-MM-DD HH:mm:ss，Timus DateTime 字段写入专用。
-  服务端要求完整时间格式，传纯日期或 T 分隔会报 could not be parsed at index 10。
+DateTime 输出为 YYYY-MM-DD HH:mm:ss；服务端传纯日期或 T 分隔会报解析错误。
 """
 
 from __future__ import annotations
@@ -101,11 +95,6 @@ def main() -> None:
     opt.add_argument("--base", help="基准日期 YYYY-MM-DD，默认今天")
     opt.add_argument("--count", type=int, default=10, help="选项数量，默认 10")
 
-    dts = sub.add_parser("dates", help="换算单条任务起止日期")
-    dts.add_argument("--start-date", required=True, help="所选启动日期 YYYY-MM-DD")
-    dts.add_argument("--start-day", type=int, required=True, help="S.第几天开始")
-    dts.add_argument("--end-day", type=int, required=True, help="S.第几天结束")
-
     bat = sub.add_parser("batch", help="一次换算多条任务的起止日期")
     bat.add_argument("--start-date", required=True, help="所选启动日期 YYYY-MM-DD")
     bat.add_argument(
@@ -116,7 +105,7 @@ def main() -> None:
         help="一条任务，可重复传入；如 --task '环境部署|1|2'",
     )
 
-    sgl = sub.add_parser("single", help="模式 B 自定义创建：校验完成日期并换算今日/完成日期的 DateTime")
+    sgl = sub.add_parser("single", help="校验完成日期并换算今日/完成日期的 DateTime")
     sgl.add_argument("--end-date", required=True, help="所选完成日期 YYYY-MM-DD")
     sgl.add_argument("--base", help="开始日期 YYYY-MM-DD，默认今天")
 
@@ -127,9 +116,6 @@ def main() -> None:
             if args.count < 1:
                 raise ValueError("选项数量必须 >= 1")
             payload: object = _options(base, args.count)
-        elif args.command == "dates":
-            base = _parse_day(args.start_date)
-            payload = _range_payload(base, args.start_day, args.end_day)
         elif args.command == "batch":
             base = _parse_day(args.start_date)
             if not args.task:

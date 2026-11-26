@@ -31,13 +31,12 @@ general-timus-expert/
 │   │   ├── references/
 │   │   │   ├── timus-team-schema.yaml    # 表头元数据模板（唯一字段来源）
 │   │   │   └── timus-team-data.yaml      # 基础数据模板（本地业务块）
-│   │   └── scripts/                      # 四脚本（跨包字节级一致）
+│   │   └── scripts/                      # 三脚本（跨包字节级一致）
 │   ├── timus-app-maintenance/            # 行为层权威源（路由 + 采集确认 + 查改删）
 │   │   ├── SKILL.md                      # 行为层唯一权威源
 │   │   ├── scripts/data_tool.py          # 本地基础数据查改删
 │   │   └── references/
-│   │       ├── intent-routing.md         # 意图→技能映射
-│   │       └── data-contract.md          # 本地数据脚本契约
+│   │       └── intent-routing.md         # 意图→技能映射
 │   ├── timus-app-add/                    # 基础数据批量添加（先查后加 / 直接填写）
 │   │   └── scripts/add_data.py           # 批量追加记录
 │   ├── timus-app-html/                   # 数据页面（自包含 HTML 展示 / 编辑）

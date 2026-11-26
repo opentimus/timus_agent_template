@@ -1,15 +1,5 @@
-# <应用名> 表头元数据（Carly 通用模板 + 演示值）
-#
-# 两类 schema 之一：本文件存表名 / 字段名 / 类型 / 可写性；基础数据见同目录 timus-team-data.yaml。
-# 替换为真实应用时，把 team_code / tables / fields 换成目标配置；type_policy 不要删条目。
-#
-# 格式是受限 YAML 子集：顶层键、2 空格缩进键值、4 空格缩进字段键值；不支持列表、锚点与跨行结构。
-# 解析器把行内第一个 `#` 视为注释起点，值中不能出现井号字面量。
-#
-# 校验清单：
-# - `team_code` / `tables` / `fields` 三段表名集合必须一致。
-# - 每个字段的类型必须出现在 `type_policy` 中。
-# - 字段名逐字保留平台前缀；表单标识 `tbl...` 只用于追溯，禁止出现在工具参数里。
+# 表头元数据模板：替换为真实应用时改 team_code / tables / fields，type_policy 不删条目。
+# 基础数据见同目录 timus-team-data.yaml；表单标识 tbl... 只作追溯，禁入工具参数。
 
 schema_version: "1.0.0"
 team_code: 00.GENERIC.DEMO

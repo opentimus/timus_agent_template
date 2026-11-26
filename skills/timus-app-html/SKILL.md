@@ -43,6 +43,6 @@ python3 <skill-dir>/scripts/build_html.py --payload <payload.json> --output <页
 ## 约束
 
 - 自包含：样式与脚本内联，无外链、无第三方依赖。
-- 令牌存连接器，不写入 HTML。HTML 若需令牌与域名，须放独立 `.js` 凭据文件，避免 HTML 分享时被截取；页面本身不含令牌 / 地址 / 凭据，也不直连连接器。
+- 页面不含令牌 / 地址 / 凭据，也不直连连接器；令牌规范见 README「关于工具与连接器」。
 - 页面数据只用于展示与回传；写入由 `timus-app-add` / `timus-app-maintenance` 执行。
 - 空数据也生成页面，显示「暂无数据」，不报错。

@@ -50,19 +50,15 @@ version: 1.0.0
 
 ## 脚本（跨专家包共用同一份代码）
 
-四脚本在三包**字节级一致**；改动须全同步。基础数据的查 / 改 / 删脚本在 `timus-app-maintenance` 技能。
+三脚本在三包**字节级一致**；改动须全同步。基础数据的查 / 改 / 删脚本在 `timus-app-maintenance` 技能。
 
 | 脚本 | 职责 |
 | --- | --- |
-| `resolve_schema.py` | 表头元数据查询与参数生成（降级） |
-| `schema_lib.py` | 受限 YAML 解析 + 类型层校验 |
+| `schema_lib.py` | 受限 YAML 解析 + 字段可写性查询 |
 | `point_util.py` | 数值口径：`normalize` 两位小数、`split` 按权重拆分、`next-pair` / `next-batch` 单号 |
-| `date_util.py` | 日期口径：`options` 候选、`dates` / `batch` 第 N 天、`single` 今日→目标日，输出 `YYYY-MM-DD HH:mm:ss` |
+| `date_util.py` | 日期口径：`options` 候选、`batch` 第 N 天、`single` 今日→目标日，输出 `YYYY-MM-DD HH:mm:ss` |
 
 ```bash
-python3 <skill-dir>/scripts/resolve_schema.py --list-tables
-python3 <skill-dir>/scripts/resolve_schema.py --list-fields --table <表单名>
-python3 <skill-dir>/scripts/resolve_schema.py --table <表单名> --set <字段>=<值>
 python3 <skill-dir>/scripts/point_util.py normalize 99.5
 python3 <skill-dir>/scripts/point_util.py split --total 6 --weight 3 --weight 2 --weight 1
 python3 <skill-dir>/scripts/point_util.py next-pair --prefix TIN
@@ -79,12 +75,12 @@ python3 <skill-dir>/scripts/date_util.py single --end-date 2026-11-30
 - 两类 schema 整体、表单标识、自定义字段名禁入连接器参数。
 - 禁猜字段名；禁用语义包外的工具名。
 - 禁凭记忆填关联 ID；禁心算数值 / 单号、手拼日期。
-- 令牌存连接器，不写入 HTML；HTML 若需令牌与域名，须放独立 `.js` 凭据文件。禁在语义包、脚本或输出写入真实令牌、地址或凭据。
-- 禁改 `scripts/` 四脚本接口；新能力走新脚本。
+- 禁在语义包、脚本或输出写入真实令牌 / 地址 / 凭据；规范见 README「关于工具与连接器」。
+- 禁改 `scripts/` 三脚本接口；新能力走新脚本。
 
 ## 资源
 
 - `references/timus-team-schema.yaml`：表头元数据模板（含演示值），填后为唯一字段来源。
 - `references/timus-team-data.yaml`：基础数据模板（含演示值），填后为本地取值来源。
-- `scripts/`：四脚本，跨包字节级一致。
-- 解析限制：`schema_lib.py` 按行首缩进读键值；行内第一个 `#` 起为注释，值禁含 `#`，不支持列表、引号包裹的井号或跨行结构。
+- `scripts/`：三脚本，跨包字节级一致。
+- 解析限制：按行首缩进读键值；不支持列表与跨行结构。

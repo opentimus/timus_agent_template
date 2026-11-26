@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Callable, NamedTuple, cast
+from typing import Callable, cast
 
 SKILLS = Path(__file__).resolve().parents[2]
 SCHEMA_SCRIPTS = SKILLS / "timus-app-schema" / "scripts"
@@ -222,49 +222,25 @@ def mutate(path: str, table: str, record: str, sets: list[str], delete: bool, sc
             "deleted": delete, "changed": applied}
 
 
-class Args(NamedTuple):
-    data: str
-    schema: str
-    list_tables: bool
-    table: str
-    record: str
-    where: list[str]
-    fields: list[str]
-    sets: list[str]
-    delete: bool
-
-
-def parse_args() -> Args:
-    parser = argparse.ArgumentParser(description="本地基础数据维护（查 / 改 / 删）")
-    _ = parser.add_argument("--data", default=str(DEFAULT_DATA), help="基础数据 YAML 路径")
-    _ = parser.add_argument("--schema", default=str(DEFAULT_SCHEMA), help="表头元数据路径（字段校验）")
-    _ = parser.add_argument("--list-tables", action="store_true", help="列出本地表与记录数")
-    _ = parser.add_argument("--table", default="", help="表名")
-    _ = parser.add_argument("--record", default="", help="记录 ID（改 / 删必填）")
-    _ = parser.add_argument("--where", action="append", default=[], metavar="字段=值", help="过滤条件，可重复，AND")
-    _ = parser.add_argument("--fields", action="append", nargs="+", default=[], metavar="字段", help="返回字段，可多值 / 重复")
-    _ = parser.add_argument("--set", dest="sets", action="append", nargs="+", default=[], metavar="字段=值", help="改字段，可多值 / 重复")
-    _ = parser.add_argument("--delete", action="store_true", help="删除指定记录")
-    raw = parser.parse_args()
-    return Args(
-        data=cast(str, raw.data),
-        schema=cast(str, raw.schema),
-        list_tables=cast(bool, raw.list_tables),
-        table=cast(str, raw.table),
-        record=cast(str, raw.record),
-        where=cast(list[str], raw.where),
-        fields=[name for group in cast(list[list[str]], raw.fields) for name in group],
-        sets=[item for group in cast(list[list[str]], raw.sets) for item in group],
-        delete=cast(bool, raw.delete),
-    )
-
-
 def main() -> None:
-    args = parse_args()
+    parser = argparse.ArgumentParser(description="本地基础数据维护（查 / 改 / 删）")
+    parser.add_argument("--data", default=str(DEFAULT_DATA), help="基础数据 YAML 路径")
+    parser.add_argument("--schema", default=str(DEFAULT_SCHEMA), help="表头元数据路径（字段校验）")
+    parser.add_argument("--list-tables", action="store_true", help="列出本地表与记录数")
+    parser.add_argument("--table", default="", help="表名")
+    parser.add_argument("--record", default="", help="记录 ID（改 / 删必填）")
+    parser.add_argument("--where", action="append", default=[], metavar="字段=值", help="过滤条件，可重复，AND")
+    parser.add_argument("--fields", action="append", nargs="+", default=[], metavar="字段", help="返回字段，可多值 / 重复")
+    parser.add_argument("--set", dest="sets", action="append", nargs="+", default=[], metavar="字段=值", help="改字段，可多值 / 重复")
+    parser.add_argument("--delete", action="store_true", help="删除指定记录")
+    args = parser.parse_args()
+    fields = [name for group in args.fields for name in group]
+    sets = [item for group in args.sets for item in group]
+
     try:
-        if args.delete and args.sets:
+        if args.delete and sets:
             raise DataError("--delete 与 --set 互斥，不能同时使用")
-        if args.list_tables and (args.table or args.where or args.fields or args.sets or args.delete):
+        if args.list_tables and (args.table or args.where or fields or sets or args.delete):
             raise DataError("--list-tables 不能与其它操作参数同时使用")
         dataset = load_data(args.data)
         meta = cast(dict[str, str], dataset["meta"])
@@ -275,13 +251,13 @@ def main() -> None:
             return
         if not args.table:
             raise DataError("需要 --table 或 --list-tables")
-        if args.delete or args.sets:
+        if args.delete or sets:
             if not args.record:
                 raise DataError("改 / 删需要 --record 指定记录 ID")
-            result = mutate(args.data, args.table, args.record, args.sets, args.delete, args.schema)
+            result = mutate(args.data, args.table, args.record, sets, args.delete, args.schema)
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return
-        records = query(dataset, args.table, args.where, args.fields, args.schema)
+        records = query(dataset, args.table, args.where, fields, args.schema)
         print(json.dumps(
             {"team_code": meta["team_code"], "table": args.table, "count": len(records), "records": records},
             ensure_ascii=False, indent=2,

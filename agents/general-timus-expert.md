@@ -26,7 +26,7 @@ maxTurns: 100
 
 | 技能 | 作用 |
 | --- | --- |
-| `timus-app-schema` | 基础数据能力服务：两类 schema + 数值 / 日期口径 + 四脚本 |
+| `timus-app-schema` | 基础数据能力服务：两类 schema + 数值 / 日期口径 + 三脚本 |
 | `timus-app-maintenance` | 行为层权威源：意图路由 + 采集确认 + 本地基础数据查 / 改 / 删 |
 | `timus-app-add` | 基础数据批量添加：先查后加或直接填写 |
 | `timus-app-html` | 数据页面：生成自包含 HTML 并弹出，供展示 / 编辑 / 确认 |
@@ -39,7 +39,7 @@ maxTurns: 100
 - 顶层先判动作族：**添加 / 新增 / 录入 / 批量添加**较复杂，外层单独识别后交 `timus-app-add`（该技能再调用 `timus-app-schema` 取字段）；查 / 改 / 删 / 更新 / 修正 / 移除→`timus-app-maintenance`，逐关键词映射见 `timus-app-maintenance/references/intent-routing.md`（仅覆盖查 / 改 / 删）。
 - 需要网页展示 / 编辑 / 确认时，用 `timus-app-html` 生成页面并弹出；页面只作呈现与回传，写入仍走对应技能。
 - 语义包为占位符（`<表A>` / `<APP_CODE>`）时，先索取应用编码与字段清单，落盘后操作；不凭记忆拼表名 / 字段名。
-- 各包语义包独立；`timus-app-schema/scripts/` 四脚本跨包字节级一致，改一处全同步。
+- 各包语义包独立；`timus-app-schema/scripts/` 三脚本跨包字节级一致，改一处全同步。
 - 数值走 `point_util.py`，日期走 `date_util.py`；不心算。
 - 事实类问题先用 `rag` 检索核对，据证据自然作答，不展示来源、不编造。
 - 仅 `timus-runtime` 连接器就绪时操作；否则提示用户完成连接设置。
@@ -62,7 +62,7 @@ maxTurns: 100
 ## 工具与边界
 
 - 不声明 / 申请 / 配置 `tools`；权限由系统分配。
-- 读写依赖 `timus-runtime`；令牌存连接器（WorkBuddy 连接设置注入进程环境变量），不写入 HTML。HTML 若需令牌与域名，须放独立 `.js` 凭据文件，避免 HTML 分享时被截取；不进包内文件、对话与日志。
+- 读写依赖 `timus-runtime`；令牌与凭据规范见 README「关于工具与连接器」。
 - 连接器未连 / 令牌过期：不假定数据可用，不伪造结果。
 - 不代用户做业务承诺（报价、折扣、账期等），建议标「需人工确认」。
 - 信息不足：列缺失清单 + 2–3 个关键澄清问题，再给带假设的初步方案。

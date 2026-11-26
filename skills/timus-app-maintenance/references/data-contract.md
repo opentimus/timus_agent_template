@@ -28,7 +28,7 @@ python3 <skill-dir>/scripts/data_tool.py --table <表名> --record <记录ID> --
 
 - `--set` 可多值；只改记录中已存在字段，不新增字段。
 - 字段名须在表头元数据中；新值按类型书写，数值经 `point_util` 归一、日期取 `date_util` 的 `*_datetime`。
-- 必经确认框：复述关键字段值 + 记录 ID + 各字段「旧值 → 新值」。
+- 定位唯一后直接写入；回报记录 ID 与旧值 → 新值。
 
 ## 删除
 

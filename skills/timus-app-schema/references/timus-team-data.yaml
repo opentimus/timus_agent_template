@@ -1,38 +1,48 @@
 # <应用名> 基础数据（Carly 通用模板 + 演示值）
 #
 # 两类 schema 之二：本文件存本地业务块记录值；表头元数据见同目录 timus-team-schema.yaml。
-# 替换为真实应用时，把 team_code 与 data 下的记录换成实际业务数据；表名 / 字段名须与表头元数据逐字一致。
+# 替换为真实应用时，把 team_code / synced_at / source / members 换成实际配置与快照。
 #
-# 格式是受限 YAML 子集：顶层键、2 空格表名、4 空格记录 ID、6 空格字段名: 值；不支持列表、锚点与跨行结构。
+# 格式是受限 YAML 子集：顶层键、2 空格嵌套键、2 空格 `-` 列表项、4 空格列表项属性；不支持锚点与跨行结构。
 # 解析器把行内第一个 `#` 视为注释起点，值中不能出现井号字面量。
 #
 # 校验清单：
 # - `team_code` 与表头元数据一致。
-# - 记录 ID 仅本地追溯，不写入连接器参数。
-# - DateTime 用完整 YYYY-MM-DD HH:mm:ss；Number 可带引号。
+# - `members[].open_id` 为用户字段写入值，不得用姓名 / 别名 / 邮箱。
+# - `members[].record_id` 仅本地追溯，不写入连接器参数。
+# - 业务块按需在 `data` 段追加（表 / 记录 ID / 字段三层缩进），本模板不含示例业务数据。
 
 schema_version: "1.0.0"
 team_code: 00.GENERIC.DEMO
+synced_at: "2026-11-26 15:44:53"
 
-data:
-  客户:
-    cust001:
-      S.客户ID: "1"
-      S.客户: 示例客户甲
-      S.联系方式: 13800000000
-      S.状态: 活跃
-      S.备注: 本地示例
-    cust002:
-      S.客户ID: "2"
-      S.客户: 示例客户乙
-      S.联系方式: 13900000000
-      S.状态: 停用
-      S.备注: 本地示例
-  订单:
-    order001:
-      S.订单号: DEMO-0001
-      S.客户ID: "1"
-      S.金额: "1200.00"
-      S.下单时间: "2026-11-20 10:00:00"
-      S.状态: 已提交
-      S.备注: 本地示例
+source:
+  app_name: TODO
+  table_name: 团队成员
+
+members:
+  - member_id: TCF-001
+    member: 左左
+    role: 财务
+    open_id: "on_00000000000000000000000000000001"
+    record_id: reczz28bx2V8LHcd
+  - member_id: TCF-002
+    member: Barry
+    role: 质量
+    open_id: "on_00000000000000000000000000000002"
+    record_id: reczz28bx2V8PfnY
+  - member_id: TCF-003
+    member: 飞书用户1446NF
+    role: 客服
+    open_id: "on_00000000000000000000000000000003"
+    record_id: reczz28bx2V8Sb29
+  - member_id: TCF-004
+    member: 王臻
+    role: 商务
+    open_id: "on_00000000000000000000000000000004"
+    record_id: reczz28bx2V8QIIp
+  - member_id: TCF-005
+    member: 蒋彦博
+    role: 咨询
+    open_id: "on_00000000000000000000000000000005"
+    record_id: reczz28bx2V8PRQ3

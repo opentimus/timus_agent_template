@@ -8,7 +8,7 @@ version: 1.0.0
 
 本 Skill 是**基础数据能力服务**：定义两类 schema，提供字段解析与数值 / 日期口径脚本。行为路由、采集确认、写入与查改删流程统一由 `timus-app-maintenance` 负责。
 
-语义包**不是 MCP 运行时入参**：连接器只接受 `app_name` / `table_name` / `fields`，映射在 schema 层完成。参数语义 / 响应 / 错误 / 安全见 `references/write-contract.md`。
+语义包**不是 MCP 运行时入参**：连接器只接受 `app_name` / `table_name` / `fields`，映射在 schema 层完成。
 
 领域无关：换应用 = 换 `references/` 下的两类 schema，代码与契约不动。
 
@@ -31,17 +31,18 @@ version: 1.0.0
 | `tables` 下表单名 | `table_name` | 与平台配置一致 |
 | `tables` 下表单标识（`tbl...`） | 不映射 | 仅元数据 / 追溯，禁入参数 |
 | `fields` 下系统字段名 | `fields[].name` | 唯一允许的字段标识 |
-| `type_policy` | 可写性 | 只读：`AutoNumber` / `CreatedTime` / `Lookup` / `User` / `Formula`；可写：`Text` / `Number` / `SingleSelect` / `DateTime` |
+| `type_policy` | 可写性 | 只读：`AutoNumber` / `CreatedTime` / `Lookup` / `Formula`；可写：`Text` / `Number` / `SingleSelect` / `DateTime` / `User` |
 
 - 字段名逐字使用，含前缀与大小写；同应用不同表前缀可不同，照 yaml 抄，不统一。
-- 只读类型及需特定值结构的 `Lookup` / `User` 禁入写 `fields`。
+- 只读类型及需特定值结构的 `Lookup` 禁入写 `fields`；`User` 可写，值必须传 `open_id`（不能是姓名 / 别名 / 邮箱）。
 - 字段缺失时索取准确名，不用近义词 / 界面标题 / 历史别名。
 - 包内无自定义字段名；历史别名与 `A.` 前缀禁传。
 
 ## 基础数据（本地业务块）
 
-`references/timus-team-data.yaml` 存本地业务记录；首次使用须填真实 `team_code` 与记录。结构：`data` → 表名 → 记录 ID → 字段名: 值。记录 ID 仅本地追溯，禁入连接器参数。
+`references/timus-team-data.yaml` 存本地业务记录；首次使用须填真实 `team_code` 与记录。结构：`data` → 表名 → 记录 ID → 字段名: 值；另有 `synced_at` / `source` / `members` 快照，成员字段用下划线命名。
 
+- `members` 每项含 `member_id` / `member` / `role` / `open_id` / `record_id`；`open_id` 即 `User` 字段的写入值，禁止用姓名 / 别名 / 邮箱；`record_id` 仅本地追溯。
 - 本地查询先于远程：命中即直接用，避免 `apaas_page_records`；未命中再走远程。
 - 字段名须在表头元数据中存在，否则 `exit 2`。
 - 本地数据只作取值来源，不伪造远程结果；远程返回的新记录按需落盘后再复用。
@@ -78,13 +79,12 @@ python3 <skill-dir>/scripts/date_util.py single --end-date 2026-11-30
 - 两类 schema 整体、表单标识、自定义字段名禁入连接器参数。
 - 禁猜字段名；禁用语义包外的工具名。
 - 禁凭记忆填关联 ID；禁心算数值 / 单号、手拼日期。
-- 禁在语义包、脚本或输出写入真实令牌、地址或凭据。
+- 令牌存连接器，不写入 HTML；HTML 若需令牌与域名，须放独立 `.js` 凭据文件。禁在语义包、脚本或输出写入真实令牌、地址或凭据。
 - 禁改 `scripts/` 四脚本接口；新能力走新脚本。
 
 ## 资源
 
 - `references/timus-team-schema.yaml`：表头元数据模板（含演示值），填后为唯一字段来源。
 - `references/timus-team-data.yaml`：基础数据模板（含演示值），填后为本地取值来源。
-- `references/write-contract.md`：参数 / 响应 / 错误 / 安全（跨包同一份）。
 - `scripts/`：四脚本，跨包字节级一致。
 - 解析限制：`schema_lib.py` 按行首缩进读键值；行内第一个 `#` 起为注释，值禁含 `#`，不支持列表、引号包裹的井号或跨行结构。

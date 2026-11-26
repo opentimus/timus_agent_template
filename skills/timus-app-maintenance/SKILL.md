@@ -1,6 +1,6 @@
 ---
 name: timus-app-maintenance
-description: Timus 数据记录维护技能 — 行为层唯一权威源：意图路由、采集渠道、写入确认与查 / 改 / 删流程。对本地基础数据做查 / 改 / 删，字段以 timus-app-schema 的表头元数据为准。触发词：查记录、查数据、搜、列出、详情、改记录、更新记录、修正字段、删记录、删除记录、移除、写入确认、弹窗录入。
+description: Timus 数据记录维护技能 — 行为层唯一权威源：意图路由、采集渠道与查 / 改 / 删流程。对本地基础数据做查 / 改 / 删，字段以 timus-app-schema 的表头元数据为准。触发词：查记录、查数据、搜、列出、详情、看一下、改记录、更新记录、修正字段、删记录、删除记录、移除、弹窗录入。
 version: 1.0.0
 agent_created: true
 ---
@@ -9,7 +9,7 @@ agent_created: true
 
 对本地基础数据做查 / 改 / 删；表名与字段名取自 `timus-app-schema` 的两类 schema。**不绑定具体实体**：表名、字段名、关键字段均由 schema 判定。
 
-本 Skill 是**行为层唯一权威源**：意图路由见 `references/intent-routing.md`；脚本契约见 `references/data-contract.md`；参数语义 / 响应 / 错误 / 安全见 `skills/timus-app-schema/references/write-contract.md`。不生成 HTML、不启本地代理、浏览器不参与；对话采集，助手直调脚本。
+本 Skill 是**行为层唯一权威源**：意图路由见 `references/intent-routing.md`；脚本契约见 `references/data-contract.md`。不生成 HTML、不启本地代理、浏览器不参与；对话采集，助手直调脚本。
 
 ## 意图路由
 
@@ -18,7 +18,7 @@ agent_created: true
 | 动作 | 用户关键词 | 执行 |
 | --- | --- | --- |
 | 查询 | 查 / 搜 / 列出 / 详情 / 看一下 | `data_tool.py --table` / `--where` / `--fields` |
-| 修改 | 改 / 更新 / 修正 / 改状态 | `data_tool.py --record --set`（确认后执行） |
+| 修改 | 改 / 更新 / 修正 / 改状态 | `data_tool.py --record --set` |
 | 删除 | 删 / 删除 / 移除 / 清掉 | `data_tool.py --record --delete` |
 
 意图含糊（如「处理一下这条记录」）先弹 `AskUserQuestion` 选动作，不猜测。
@@ -33,13 +33,12 @@ agent_created: true
 | 数值 | 首句解析 / 弹窗单选常用值 | 一律 `point_util.py normalize`；正数、两位小数；总量 `split` |
 | 单号 | 不采集 | `point_util.py next-pair` / `next-batch` |
 | 日期 | `date_util.py options` 候选 → 弹窗选择 | 写入取脚本 `*_datetime`，不心算星期、不手拼格式 |
-| 写入确认 | 正文清单（表格）+ `AskUserQuestion` 精简确认框（必经） | 见下 |
 
 ## 字段到采集渠道映射
 
 具体字段表由本技能给出，本节只定**判定顺序**：
 
-1. `Lookup` / `AutoNumber` / `CreatedTime` / `User` / `Formula` → 不采集、不写入。
+1. `Lookup` / `AutoNumber` / `CreatedTime` / `Formula` → 不采集、不写入；`User` 可写，必须传入 `open_id`。
 2. 在本技能「固定值」清单 → 预置值，不问。
 3. 外键 ID（`S.<实体>ID` 且 `Text`）→ 先查本地基础数据 / 远程候选 + 弹窗，或上游继承。
 4. `Number` → `point_util`。
@@ -52,20 +51,8 @@ agent_created: true
 
 - 每次 1–4 题，每题 2–4 选项；`header` ≤12 字符，`label` 1–5 词并附 `description`。
 - 推荐项首位并标「（推荐）」；互不依赖的选择合并**同一次**调用。
-- 弹窗只承载选择题与动作确认，不承载长文本与字段明细。
+- 弹窗只承载选择题与动作选择，不承载长文本与字段明细。
 - 开放输入由 UI「其他」承接，**不手工添加「自定义 / 其他」**。
-
-## 写入确认两步法（唯一版本）
-
-1. **正文清单**：正文「一句话 + 表格」，逐条编号；必填项完整展示，空值 `—`，敏感字段脱敏；字段明细**仅此处**。
-2. **精简弹窗**：紧接弹一次 `AskUserQuestion`，`question` 仅 `即将写入「<表名>」表，共 N 条，确认提交？`（不重复字段值）；选项固定 `确认提交`（首位、「（推荐）」）/ `取消 / 返回修改`。
-
-判定与约束：
-
-- 仅 `确认提交` 才写入；取消 / 关闭即终止，调整后重走两步。
-- 用户说「直接记 / 不用确认 / 别问了」也不得省略；禁弹窗塞字段、禁文字「请回复确认」替代弹窗。
-- 弹窗后本批参数锁定；改任一条都重出清单、重弹窗。
-- **降级**：仅当宿主无弹窗能力，正文清单照常并请用户文字回复「确认」，收到明确「确认」才写入。
 
 ## 候选查询规则
 
@@ -101,32 +88,31 @@ python3 <skill-dir>/scripts/data_tool.py --table <表名> --where "S.字段=值"
 
 `--where` 可重复（AND），`--fields` 可多值。直接执行；回报条数与关键字段，无匹配如实说明，不编造。统计 / 对账在结果上完成。
 
-## 二、修改（先定位，确认后写）
+## 二、修改（先定位，再写入）
 
 1. **定位**：有记录 ID 直接用；无则查询且**必须唯一**（0 条报未找到；多条请补条件或给 ID，不擅自挑）。
 2. **采集新值**：按上文映射逐项采集；字段名 / 类型按表头元数据校验，只读字段拒绝。**一次只改一条。**
-3. **确认**：复述「表名 / 记录 ID / 关键字段值 / 各字段旧值 → 新值」，走「写入确认两步法」。
-4. **执行**：`--record <记录ID> --set "字段=值"`，只改已存在字段，不新增字段；回报旧值 → 新值。
+3. **执行**：`--record <记录ID> --set "字段=值"`，只改已存在字段，不新增字段；回报旧值 → 新值。
 
 ## 三、删除（破坏性）
 
 1. **定位**：同修改——有 ID 直接用，无则查询且**唯一**。
 2. **执行**：`--record <记录ID> --delete`；回报被删标识，删后不自动重查。
 
-## 降级与禁止
+## 禁止
 
-- 弹窗不可用 → 文字逐项复述：改须明确「确认」。
 - 不写只读字段；不凭记忆填记录 ID，候选来自查询。
 - 不批量改 / 删；一次只操作一条。
 - 不删表、不改表结构、不新建；只操作登记的表。
 - 同一条改 / 删不重复提交；查询可重试。
 - 禁伪造 `AskUserQuestion` 或工具名 / 参数；禁绕过连接器直连 REST、生成 HTML、启本地 HTTP 代理、浏览器参与写入。
 - 禁心算数值 / 单号、手拼日期；禁在脚本或输出写入真实令牌、地址或凭据。
+- 令牌存连接器：由 WorkBuddy 连接设置注入进程环境变量；不写入 HTML。HTML 若需令牌与域名，须放独立 `.js` 凭据文件，避免分享时被截取；不进包内文件、对话、命令行或日志。
 
 ## 示例
 
 - 「查客户里状态为 X 的记录」→ `--table 客户 --where "S.状态=X"` → 回报列表。
-- 「把客户里 XX 的字段改成 YY」→ 定位唯一 → 复述旧值 → 新值 → 确认框 → `--set` → 回报。
+- 「把客户里 XX 的字段改成 YY」→ 定位唯一 → `--set` → 回报。
 - 「删掉客户里 XX 这条」→ 定位唯一 → `--delete` → 回报。
 
 ## 资源
@@ -135,4 +121,3 @@ python3 <skill-dir>/scripts/data_tool.py --table <表名> --where "S.字段=值"
 - `references/data-contract.md`：本地数据脚本契约与定位规则。
 - `skills/timus-app-schema/references/timus-team-schema.yaml`：表头元数据，表 / 字段 / 可写性唯一来源。
 - `skills/timus-app-schema/references/timus-team-data.yaml`：基础数据，本地业务块。
-- `skills/timus-app-schema/references/write-contract.md`：参数 / 响应 / 错误 / 安全。

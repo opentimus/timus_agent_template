@@ -10,7 +10,7 @@
 「第 N 天」按 1 基计数：第 1 天 = 启动日期当天，第 N 天 = 启动日期 + (N-1) 天。
 
 日期输出字段说明：
-- start_date / end_date：YYYY-MM-DD，向后兼容，用于展示与确认框；
+- start_date / end_date：YYYY-MM-DD，向后兼容，用于展示；
 - start_datetime / end_datetime：YYYY-MM-DD HH:mm:ss，Timus DateTime 字段写入专用。
   服务端要求完整时间格式，传纯日期或 T 分隔会报 could not be parsed at index 10。
 """

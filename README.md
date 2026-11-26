@@ -16,7 +16,7 @@
 - 本地业务块（基础数据）→ `skills/timus-app-schema/references/timus-team-data.yaml`（模板含演示值）；先本地命中，未命中再远程。
 - 数值 / 日期口径与脚本 → `skills/timus-app-schema/SKILL.md`；schema 仅作基础数据能力服务。
 - 行为路由 / 采集确认 / 写入流程 → `skills/timus-app-maintenance/SKILL.md`；逐关键词映射见同技能 `references/intent-routing.md`。
-- 通用写契约（参数 / 响应 / 错误 / 安全）→ `skills/timus-app-schema/references/write-contract.md`；`agents/*.md` 只留原则。
+- `agents/*.md` 只留原则，不复述流程细则。
 
 ## 目录结构
 
@@ -30,8 +30,7 @@ general-timus-expert/
 │   │   ├── SKILL.md                      # 两类 schema + 数值/日期口径 + 模板化指南
 │   │   ├── references/
 │   │   │   ├── timus-team-schema.yaml    # 表头元数据模板（唯一字段来源）
-│   │   │   ├── timus-team-data.yaml      # 基础数据模板（本地业务块）
-│   │   │   └── write-contract.md         # 通用写契约（跨包同一份）
+│   │   │   └── timus-team-data.yaml      # 基础数据模板（本地业务块）
 │   │   └── scripts/                      # 四脚本（跨包字节级一致）
 │   ├── timus-app-maintenance/            # 行为层权威源（路由 + 采集确认 + 查改删）
 │   │   ├── SKILL.md                      # 行为层唯一权威源
@@ -54,7 +53,7 @@ general-timus-expert/
 
 依赖 **`timus-runtime` 连接器**（`plugin.json` 的 `dependencies.connectors`）：
 
-- 地址与令牌由用户在 WorkBuddy **连接设置**填写，注入连接器进程环境变量；不写入本包、不进对话与日志；本包无 `.mcp.json`。
+- 令牌存连接器：由用户在 WorkBuddy **连接设置**填写并注入连接器进程环境变量；不写入 HTML。HTML 若需令牌与域名，须放独立 `.js` 凭据文件，避免 HTML 分享时被截取；不进本包、对话与日志；本包无 `.mcp.json`。
 - 连接器未连 / 令牌过期：不假定数据可用，不伪造查询结果。
 
 ## 打包与上架

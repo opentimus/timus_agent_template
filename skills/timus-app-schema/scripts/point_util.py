@@ -36,6 +36,13 @@ class PointError(Exception):
     """点数口径或拆分参数不合法。"""
 
 
+def _check_prefix(prefix: str) -> str:
+    name = (prefix or "").strip().upper()
+    if not re.fullmatch(r"[A-Z]+", name):
+        raise PointError("前缀须为纯字母（如 TIN / TPAY），收到：{}".format(prefix))
+    return name
+
+
 def normalize(raw: str) -> dict[str, object]:
     """把任意合法正数输入归一化为两位小数口径。"""
     text = (raw or "").strip()
@@ -45,9 +52,9 @@ def normalize(raw: str) -> dict[str, object]:
         raise PointError("点数须为正数（可带小数，不接受符号或科学计数法）：{}".format(raw))
     try:
         value = Decimal(text)
+        cents = value.quantize(CENT, rounding=ROUND_HALF_UP)
     except InvalidOperation:
-        raise PointError("点数不是有效数值：{}".format(raw))
-    cents = value.quantize(CENT, rounding=ROUND_HALF_UP)
+        raise PointError("点数不是有效数值或超出可处理范围：{}".format(raw))
     if cents <= 0:
         raise PointError("点数必须大于 0，收到：{}".format(raw))
     return {
@@ -73,11 +80,9 @@ def split(total: str, weights: list[str]) -> dict[str, object]:
         parsed.append(int(text))
 
     weight_sum = sum(parsed)
-    running = Decimal("0")
     items: list[dict[str, object]] = []
     for index, weight in enumerate(parsed, start=1):
         share = (total_cents * weight / weight_sum).quantize(CENT, rounding=ROUND_HALF_UP)
-        running += share
         items.append({"index": index, "weight": weight, "cents": int((share * 100).to_integral_value())})
 
     # 尾差全部调整到最后一条，保证 Σ 严格等于 T
@@ -109,9 +114,7 @@ def split(total: str, weights: list[str]) -> dict[str, object]:
 
 def next_pair(prefix: str) -> dict[str, str]:
     """生成一对相邻流水号：主号 = 前缀 + 毫秒，尾号 = 主号数值 +1。"""
-    name = (prefix or "").strip().upper()
-    if not re.fullmatch(r"[A-Z]+", name):
-        raise PointError("前缀须为纯字母（如 TIN / TPAY），收到：{}".format(prefix))
+    name = _check_prefix(prefix)
     stamp = int(time.time() * 1000)
     return {
         "prefix": name,
@@ -122,9 +125,7 @@ def next_pair(prefix: str) -> dict[str, str]:
 
 def next_batch(prefix: str, count: int) -> dict[str, object]:
     """生成同前缀、同毫秒、序号递增的流水号批次（-01、-02…）。"""
-    name = (prefix or "").strip().upper()
-    if not re.fullmatch(r"[A-Z]+", name):
-        raise PointError("前缀须为纯字母（如 TIN / TPAY），收到：{}".format(prefix))
+    name = _check_prefix(prefix)
     if count < 1:
         raise PointError("批次数至少为 1，收到：{}".format(count))
     stamp = int(time.time() * 1000)

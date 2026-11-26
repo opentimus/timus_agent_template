@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import cast
+from typing import Callable, NamedTuple, cast
 
 SKILLS = Path(__file__).resolve().parents[2]
 SCHEMA_SCRIPTS = SKILLS / "timus-app-schema" / "scripts"
@@ -22,26 +22,10 @@ class DataError(Exception):
     """基础数据格式或参数不合法。"""
 
 
-def _clean_line(raw: str) -> str:
-    index = raw.find("#")
-    return (raw[:index] if index >= 0 else raw).rstrip()
-
-
-def _unquote(value: str) -> str:
-    value = value.strip()
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("\"", "'"):
-        return value[1:-1]
-    return value
-
-
-def _split_pair(line: str, lineno: int) -> tuple[str, str]:
-    if ":" not in line:
-        raise DataError("第 {} 行缺少冒号：{}".format(lineno, line))
-    key, _, value = line.partition(":")
-    key = _unquote(key.strip())
-    if not key:
-        raise DataError("第 {} 行键为空".format(lineno))
-    return key, _unquote(value)
+# 复用 schema_lib 的受限 YAML 解析辅助函数，避免两处实现漂移。
+_clean_line = cast(Callable[[str], str], schema_lib._clean_line)
+_unquote = cast(Callable[[str], str], schema_lib._unquote)
+_split_pair = cast(Callable[[str, int], tuple[str, str]], schema_lib._split_pair)
 
 
 def load_data(path: str) -> dict[str, object]:
@@ -49,6 +33,8 @@ def load_data(path: str) -> dict[str, object]:
     if not file.is_file():
         raise DataError("找不到基础数据：{}".format(file))
     meta: dict[str, str] = {}
+    source: dict[str, str] = {}
+    members: list[dict[str, str]] = []
     data: dict[str, dict[str, dict[str, str]]] = {}
     section = table = record = ""
     for lineno, raw in enumerate(file.read_text(encoding="utf-8").splitlines(), start=1):
@@ -59,19 +45,35 @@ def load_data(path: str) -> dict[str, object]:
         text = line.strip()
         if indent == 0:
             key, value = _split_pair(text, lineno)
-            if key == "data":
-                if value:
-                    raise DataError("第 {} 行 data 块不应带值".format(lineno))
-                section = "data"
-            else:
-                section = ""
+            section = key if key in ("source", "members", "data") else ""
+            if not section:
                 if key in meta:
                     raise DataError("第 {} 行重复键：{}".format(lineno, key))
                 meta[key] = value
+            elif value:
+                raise DataError("第 {} 行 {} 块不应带值".format(lineno, key))
             table = record = ""
             continue
+        if section == "source":
+            if indent != 2:
+                raise DataError("第 {} 行 source 缩进须为 2 空格".format(lineno))
+            key, value = _split_pair(text, lineno)
+            source[key] = value
+            continue
+        if section == "members":
+            if indent not in (2, 4):
+                raise DataError("第 {} 行 members 缩进须为 2/4 空格".format(lineno))
+            if indent == 2:
+                if not text.startswith("- "):
+                    raise DataError("第 {} 行成员须以 `- ` 开头：{}".format(lineno, text))
+                members.append({})
+            key, value = _split_pair(text[2:] if indent == 2 else text, lineno)
+            if not members:
+                raise DataError("第 {} 行字段没有所属成员".format(lineno))
+            members[-1][key] = value
+            continue
         if section != "data":
-            raise DataError("第 {} 行缩进内容不属于 data：{}".format(lineno, text))
+            raise DataError("第 {} 行缩进内容不属于已知块：{}".format(lineno, text))
         key, value = _split_pair(text, lineno)
         if indent == 2:
             if value:
@@ -97,12 +99,16 @@ def load_data(path: str) -> dict[str, object]:
             data[table][record][key] = value
         else:
             raise DataError("第 {} 行缩进须为 2/4/6 空格".format(lineno))
-    if not meta.get("team_code") or not data:
-        raise DataError("基础数据缺少 team_code 或 data 块")
+    if not meta.get("team_code") or not members:
+        raise DataError("基础数据缺少 team_code 或 members 块")
     for name, records in data.items():
         if not records:
             raise DataError("表 {} 无记录".format(name))
-    return {"meta": meta, "data": data}
+    for index, member in enumerate(members, start=1):
+        for key in ("member_id", "member", "role", "open_id", "record_id"):
+            if not member.get(key):
+                raise DataError("第 {} 个成员缺少 {}（下划线命名）".format(index, key))
+    return {"meta": meta, "source": source, "members": members, "data": data}
 
 
 def _known_fields(schema_path: str, table: str) -> set[str]:
@@ -124,13 +130,9 @@ def query(dataset: dict[str, object], table: str, where: list[str], fields: list
         name, value = raw.split("=", 1)
         conditions.append((name.strip(), value.strip()))
     selected = fields or None
-    for name, _ in conditions:
+    for name in [key for key, _ in conditions] + (selected or []):
         if name not in known:
             raise DataError("字段 {} 不在表头元数据中：{}".format(name, table))
-    if selected:
-        for name in selected:
-            if name not in known:
-                raise DataError("字段 {} 不在表头元数据中：{}".format(name, table))
     result: list[dict[str, object]] = []
     for record_id, row in data[table].items():
         if all(row.get(name) == value for name, value in conditions):
@@ -220,42 +222,68 @@ def mutate(path: str, table: str, record: str, sets: list[str], delete: bool, sc
             "deleted": delete, "changed": applied}
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="本地基础数据维护（查 / 改 / 删）")
-    parser.add_argument("--data", default=str(DEFAULT_DATA), help="基础数据 YAML 路径")
-    parser.add_argument("--schema", default=str(DEFAULT_SCHEMA), help="表头元数据路径（字段校验）")
-    parser.add_argument("--list-tables", action="store_true", help="列出本地表与记录数")
-    parser.add_argument("--table", default="", help="表名")
-    parser.add_argument("--record", default="", help="记录 ID（改 / 删必填）")
-    parser.add_argument("--where", action="append", default=[], metavar="字段=值", help="过滤条件，可重复，AND")
-    parser.add_argument("--fields", action="append", nargs="+", default=[], metavar="字段", help="返回字段，可多值 / 重复")
-    parser.add_argument("--set", dest="sets", action="append", nargs="+", default=[], metavar="字段=值", help="改字段，可多值 / 重复")
-    parser.add_argument("--delete", action="store_true", help="删除指定记录")
-    args = parser.parse_args()
-    fields = [name for group in cast(list[list[str]], args.fields) for name in group]
-    sets = [item for group in cast(list[list[str]], args.sets) for item in group]
+class Args(NamedTuple):
+    data: str
+    schema: str
+    list_tables: bool
+    table: str
+    record: str
+    where: list[str]
+    fields: list[str]
+    sets: list[str]
+    delete: bool
 
+
+def parse_args() -> Args:
+    parser = argparse.ArgumentParser(description="本地基础数据维护（查 / 改 / 删）")
+    _ = parser.add_argument("--data", default=str(DEFAULT_DATA), help="基础数据 YAML 路径")
+    _ = parser.add_argument("--schema", default=str(DEFAULT_SCHEMA), help="表头元数据路径（字段校验）")
+    _ = parser.add_argument("--list-tables", action="store_true", help="列出本地表与记录数")
+    _ = parser.add_argument("--table", default="", help="表名")
+    _ = parser.add_argument("--record", default="", help="记录 ID（改 / 删必填）")
+    _ = parser.add_argument("--where", action="append", default=[], metavar="字段=值", help="过滤条件，可重复，AND")
+    _ = parser.add_argument("--fields", action="append", nargs="+", default=[], metavar="字段", help="返回字段，可多值 / 重复")
+    _ = parser.add_argument("--set", dest="sets", action="append", nargs="+", default=[], metavar="字段=值", help="改字段，可多值 / 重复")
+    _ = parser.add_argument("--delete", action="store_true", help="删除指定记录")
+    raw = parser.parse_args()
+    return Args(
+        data=cast(str, raw.data),
+        schema=cast(str, raw.schema),
+        list_tables=cast(bool, raw.list_tables),
+        table=cast(str, raw.table),
+        record=cast(str, raw.record),
+        where=cast(list[str], raw.where),
+        fields=[name for group in cast(list[list[str]], raw.fields) for name in group],
+        sets=[item for group in cast(list[list[str]], raw.sets) for item in group],
+        delete=cast(bool, raw.delete),
+    )
+
+
+def main() -> None:
+    args = parse_args()
     try:
-        dataset = load_data(cast(str, args.data))
+        if args.delete and args.sets:
+            raise DataError("--delete 与 --set 互斥，不能同时使用")
+        if args.list_tables and (args.table or args.where or args.fields or args.sets or args.delete):
+            raise DataError("--list-tables 不能与其它操作参数同时使用")
+        dataset = load_data(args.data)
         meta = cast(dict[str, str], dataset["meta"])
-        if cast(bool, args.list_tables):
+        if args.list_tables:
             data = cast(dict[str, dict[str, dict[str, str]]], dataset["data"])
             tables = [{"name": name, "records": len(rows)} for name, rows in data.items()]
             print(json.dumps({"team_code": meta["team_code"], "tables": tables}, ensure_ascii=False, indent=2))
             return
-        table = cast(str, args.table)
-        if not table:
+        if not args.table:
             raise DataError("需要 --table 或 --list-tables")
-        if cast(bool, args.delete) or sets:
-            if not cast(str, args.record):
+        if args.delete or args.sets:
+            if not args.record:
                 raise DataError("改 / 删需要 --record 指定记录 ID")
-            result = mutate(cast(str, args.data), table, cast(str, args.record), sets,
-                            cast(bool, args.delete), cast(str, args.schema))
+            result = mutate(args.data, args.table, args.record, args.sets, args.delete, args.schema)
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return
-        records = query(dataset, table, cast(list[str], args.where), fields, cast(str, args.schema))
+        records = query(dataset, args.table, args.where, args.fields, args.schema)
         print(json.dumps(
-            {"team_code": meta["team_code"], "table": table, "count": len(records), "records": records},
+            {"team_code": meta["team_code"], "table": args.table, "count": len(records), "records": records},
             ensure_ascii=False, indent=2,
         ))
     except (DataError, schema_lib.SchemaError, OSError) as err:

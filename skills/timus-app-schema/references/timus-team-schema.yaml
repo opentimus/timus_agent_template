@@ -19,7 +19,7 @@ type_policy:
   AutoNumber: read_only
   CreatedTime: read_only
   Lookup: read_only
-  User: read_only
+  User: writable
   Formula: read_only
   Text: writable
   Number: writable

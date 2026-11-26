@@ -22,7 +22,6 @@ READ_ONLY_HINT = {
     "AutoNumber": "服务端生成",
     "CreatedTime": "服务端生成",
     "Lookup": "关联派生，需先读取记录确认结构",
-    "User": "人员字段需特定值结构",
     "Formula": "公式自动计算，无需写入",
 }
 
@@ -32,9 +31,15 @@ class SchemaError(Exception):
 
 
 def _clean_line(raw: str) -> str:
-    index = raw.find("#")
-    if index >= 0:
-        raw = raw[:index]
+    quote = ""
+    for index, char in enumerate(raw):
+        if quote:
+            if char == quote:
+                quote = ""
+        elif char in ("'", '"'):
+            quote = char
+        elif char == "#" and (index == 0 or raw[index - 1].isspace()):
+            return raw[:index].rstrip()
     return raw.rstrip()
 
 
@@ -217,6 +222,11 @@ def _coerce_value(name: str, field_type: str, raw: object) -> object:
         if not math.isfinite(value):
             raise SchemaError("字段 {} 的数值超出范围：{}".format(name, raw))
         return int(text) if "." not in text and "e" not in text.lower() else value
+    if field_type == "User":
+        text = raw.strip()
+        if not text:
+            raise SchemaError("字段 {} 是 User，必须传入 open_id，不能为空".format(name))
+        return text
     raise SchemaError("字段 {} 的类型 {} 不支持写入".format(name, field_type))
 
 

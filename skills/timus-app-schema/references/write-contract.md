@@ -40,7 +40,7 @@
 { "ok": false, "errorCode": "kits_lowcode_error_table_config_not_found", "errorMessage": "…", "traceId": "…" }
 ```
 
-> `traceId` 常为 `"-"`，非可追溯编号；以记录 `id` 为主，`traceId` 有效时一并回报。
+> `traceId` 常为 `"-"`，非可追溯编号；以记录 `id` 为主。仅创建指令回报 `traceId`，其余不报。
 
 ## 错误处理
 

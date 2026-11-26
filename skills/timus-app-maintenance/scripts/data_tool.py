@@ -14,8 +14,8 @@ sys.path.insert(0, str(SCHEMA_SCRIPTS))
 
 import schema_lib  # pyright: ignore[reportImplicitRelativeImport]
 
-DEFAULT_DATA = SKILLS / "timus-app-schema" / "references" / "demo-data.yaml"
-DEFAULT_SCHEMA = SKILLS / "timus-app-schema" / "references" / "demo-schema.yaml"
+DEFAULT_DATA = SKILLS / "timus-app-schema" / "references" / "timus-team-data.yaml"
+DEFAULT_SCHEMA = SKILLS / "timus-app-schema" / "references" / "timus-team-schema.yaml"
 
 
 class DataError(Exception):

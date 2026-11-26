@@ -1,6 +1,6 @@
 # 意图路由（通用版，唯一权威源）
 
-`agents/*.md` 只留原则；**逐关键词映射以本文件为准**。新增技能只改本文件 + `plugin.json` 的 `skills`。
+本文件是**行为路由权威源**：判断动作族并指向本技能的执行路径。`agents/*.md` 只留原则；逐关键词映射以本文件为准。新增技能只改本文件 + `plugin.json` 的 `skills`。
 
 ## 第一原则：先判动作族
 
@@ -9,6 +9,7 @@
 | 查 / 搜 / 列出 / 详情 / 看一下 / 有多少 | 查询 | `timus-app-maintenance` |
 | 改 / 修改 / 更新 / 修正 / 改成 / 设置为 / 改状态 | 修改 | `timus-app-maintenance` |
 | 删 / 删除 / 移除 / 删掉 / 清掉 | 删除 | `timus-app-maintenance` |
+| 添加 / 新增 / 录入 / 写入 / 批量添加 / 批量录入 | 添加 | `timus-app-add` |
 
 含糊（如「处理一下这条记录」）先弹选择框选动作。
 
@@ -19,6 +20,7 @@
 | 查 / 搜 / 列出 / 详情 / 看一下 + 表名 | `timus-app-maintenance` | `data_tool.py --table` / `--where` |
 | 改 / 更新 / 修正 / 改状态 | `timus-app-maintenance` | `data_tool.py --set`（唯一 + 确认） |
 | 删 / 移除 / 清掉 | `timus-app-maintenance` | `data_tool.py --delete`（唯一定位） |
+| 添加 / 录入 / 批量添加 | `timus-app-add` | `add_data.py --set`（可重复多条） |
 
 ## 表定位规则
 

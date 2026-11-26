@@ -9,13 +9,12 @@ import sys
 from pathlib import Path
 from typing import Iterator, NamedTuple, cast
 
-SKILLS = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(SKILLS / "timus-app-schema" / "scripts"))
+SKILL = Path(__file__).resolve().parents[1]
 
-from schema_lib import clean_line, list_fields, load_schema, split_pair, unquote, SchemaError  # pyright: ignore[reportImplicitRelativeImport]
+from schema_lib import clean_line, list_fields, load_schema, split_pair, unquote, SchemaError
 
-DEFAULT_DATA = SKILLS / "timus-app-schema" / "references" / "timus-team-data.yaml"
-DEFAULT_SCHEMA = SKILLS / "timus-app-schema" / "references" / "timus-team-schema.yaml"
+DEFAULT_DATA = SKILL / "references" / "timus-team-data.yaml"
+DEFAULT_SCHEMA = SKILL / "references" / "timus-team-schema.yaml"
 
 
 class DataError(Exception):

@@ -8,10 +8,9 @@ Timus 数据类专家模板：领域无关，按可替换语义包对任意已�
 
 | 主题 | 权威源 |
 | --- | --- |
-| 字段定义 / 类型 / 可写性 | `skills/timus-app-schema/references/timus-team-schema.yaml` |
-| 本地业务块（基础数据） | `skills/timus-app-schema/references/timus-team-data.yaml` |
-| 数值 / 日期口径与脚本 | `skills/timus-app-schema/SKILL.md` |
-| 行为路由 / 采集确认 / 写入流程 | `skills/timus-app-maintenance/SKILL.md`（逐关键词见其 `references/intent-routing.md`） |
+| 字段定义 / 类型 / 可写性 | `skills/timus-app-maintenance/references/timus-team-schema.yaml` |
+| 本地业务块（基础数据） | `skills/timus-app-maintenance/references/timus-team-data.yaml` |
+| 数值 / 日期口径 / 行为路由 / 写入流程 | `skills/timus-app-maintenance/SKILL.md`（逐关键词见其 `references/intent-routing.md`） |
 | 原则与边界 | `agents/general-timus-expert.md`（只留原则，不复述流程） |
 
 ## 目录结构
@@ -21,8 +20,7 @@ general-timus-expert/
 ├── avatars/expert.png                 # 512×512 PNG（≤500KB）
 ├── agents/general-timus-expert.md     # 人设 / 原则 / 能力边界
 ├── skills/
-│   ├── timus-app-schema/              # 语义包：两类 schema + 三脚本；字段唯一来源
-│   ├── timus-app-maintenance/         # 行为层权威源：路由 + 采集 + 查改删
+│   ├── timus-app-maintenance/         # 语义包 + 行为层：schema / 本地数据 / 路由 / 查改删 / 三脚本
 │   ├── timus-app-add/                 # 批量添加
 │   ├── timus-app-html/                # 自包含 HTML 页面
 │   └── rag/                           # 示例离线知识库（复制后删除或替换）

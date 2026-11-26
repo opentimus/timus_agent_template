@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""数值口径：normalize 两位小数、split 按权重拆分（Σ 严格相等）、next-pair / next-batch 流水号。纯标准库，stdout JSON，失败 stderr 中文原因 + exit 2。用法见 timus-app-schema/SKILL.md。"""
+"""数值口径：normalize 两位小数、split 按权重拆分（Σ 严格相等）、next-pair / next-batch 流水号。纯标准库，stdout JSON，失败 stderr 中文原因 + exit 2。用法见 timus-app-maintenance/SKILL.md。"""
 
 from __future__ import annotations
 

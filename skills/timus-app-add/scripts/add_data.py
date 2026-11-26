@@ -13,8 +13,8 @@ sys.path.insert(0, str(SKILLS / "timus-app-maintenance" / "scripts"))
 
 from data_tool import DataError, append  # pyright: ignore[reportMissingImports]
 
-DEFAULT_DATA = SKILLS / "timus-app-schema" / "references" / "timus-team-data.yaml"
-DEFAULT_SCHEMA = SKILLS / "timus-app-schema" / "references" / "timus-team-schema.yaml"
+DEFAULT_DATA = SKILLS / "timus-app-maintenance" / "references" / "timus-team-data.yaml"
+DEFAULT_SCHEMA = SKILLS / "timus-app-maintenance" / "references" / "timus-team-schema.yaml"
 
 
 def main() -> None:

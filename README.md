@@ -1,46 +1,34 @@
 # 通用数据专家模板（general-timus-expert / Carly 卡莉）
 
-Timus 数据类专家模板：领域无关，按可替换语义包对任意已登记应用表查 / 改 / 删。**不直接投入使用**——复制后只换语义包与人设，通用代码与契约不动。表名、字段名、关联、固定值全从语义包推导；必填 / 选填由创建类型技能约束定义，不推导。
+复制后只换语义包与人设；通用代码和契约不动。表名、字段名、关联、固定值从语义包推导；必填 / 选填由创建类型技能定义。
 
-## 文档权威源
-
-改规则**只改权威源**，其余文档概述并引用，不复述：
+## 权威源
 
 | 主题 | 权威源 |
 | --- | --- |
-| 字段定义 / 类型 / 可写性 | `skills/timus-app-maintenance/references/timus-team-schema.yaml` |
-| 本地业务块（基础数据） | `skills/timus-app-maintenance/references/timus-team-data.yaml` |
-| 数值 / 日期口径 / 行为路由 / 写入流程 | `skills/timus-app-maintenance/SKILL.md`（逐关键词见其 `references/intent-routing.md`） |
-| 原则与边界 | `agents/general-timus-expert.md`（只留原则，不复述流程） |
+| 字段 / 类型 / 可写性 / 本地记录 | `skills/timus-app-maintenance/references/timus-team.yaml` |
+| 意图路由与定位 | `skills/timus-app-maintenance/references/intent-routing.md` |
+| 数值 / 日期 / 采集 / 写入流程 | `skills/timus-app-maintenance/SKILL.md` |
+| 原则与边界 | `agents/general-timus-expert.md` |
 
-## 目录结构
+## 目录
 
 ```
-general-timus-expert/
-├── avatars/expert.png                 # 512×512 PNG（≤500KB）
-├── agents/general-timus-expert.md     # 人设 / 原则 / 能力边界
-├── skills/
-│   ├── timus-app-maintenance/         # 语义包 + 行为层：schema / 本地数据 / 路由 / 查改删 / 三脚本
-│   ├── timus-app-add/                 # 批量添加
-│   ├── timus-app-html/                # 自包含 HTML 页面
-│   └── rag/                           # 示例离线知识库（复制后删除或替换）
-└── README.md
+avatars/expert.png
+agents/general-timus-expert.md
+skills/
+├── timus-app-maintenance/   # 语义包 + 行为层：单文件 YAML / 路由 / 查改删 / 脚本
+├── timus-app-add/           # 批量添加
+└── timus-app-html/          # 自包含 HTML
+README.md
 ```
 
-## 工具与连接器
+## 运行
 
-- 不声明 `tools`：清单与 Agent frontmatter 均无 `tools`，权限由系统分配。
-- 依赖 `timus-runtime` 连接器；令牌由用户在连接设置注入连接器进程，不写入 HTML / 对话 / 日志，不进本包（无 `.mcp.json`）。HTML 若需令牌与域名，放独立 `.js` 凭据文件。
-- 连接器未连 / 令牌过期：不假定数据可用，不伪造结果。
+依赖 `timus-runtime` 连接器；令牌由用户在连接设置注入，不进本包 / HTML / 对话 / 日志。未连接或令牌过期不伪造结果。权限由系统分配，不声明 `tools`。
 
-## 打包与上架
-
-```bash
-zip -r general-timus-expert.zip general-timus-expert -x '*.DS_Store'
-```
-
-上架前确认：`author.name` 为「武汉海辞科技有限公司」且邮箱真实；头像 512×512 ≤500KB；清单声明 `skills` 与 `dependencies.connectors: timus-runtime`；无 `tools`、无明文凭据。
+打包：`zip -r general-timus-expert.zip . -x '*.DS_Store'`
 
 ## 协议
 
-[Apache License 2.0](LICENSE)。Copyright 2026 武汉海辞科技有限公司；署名见 [NOTICE](NOTICE)，再分发保留两者。
+[Apache 2.0](LICENSE)；Copyright 2026 武汉海辞科技有限公司，署名见 [NOTICE](NOTICE)。

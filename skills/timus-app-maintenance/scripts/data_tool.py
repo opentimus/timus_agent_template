@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""本地基础数据维护：查 / 改 / 删 / 追加，原地改写受限 YAML。纯标准库。"""
+"""语义包数据维护：查 / 改 / 删 / 追加，原地改写单文件 YAML。纯标准库。"""
 from __future__ import annotations
 
 import argparse
@@ -7,100 +7,37 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Iterator, NamedTuple, cast
+from typing import cast
+
+from pack_lib import (  # pyright: ignore[reportMissingImports]
+    PackError as DataError, iter_lines, list_fields, load_pack, resolve_app, resolve_table, unquote,
+)
 
 SKILL = Path(__file__).resolve().parents[1]
-
-from schema_lib import clean_line, list_fields, load_schema, split_pair, unquote, SchemaError
-
-DEFAULT_DATA = SKILL / "references" / "timus-team-data.yaml"
-DEFAULT_SCHEMA = SKILL / "references" / "timus-team-schema.yaml"
+DEFAULT_PACK = SKILL / "references" / "timus-team.yaml"
 
 
-class DataError(Exception):
-    """基础数据格式或参数不合法。"""
+def _app(pack: dict[str, object], app: str) -> dict[str, object]:
+    return cast(dict[str, object], cast(dict[str, object], pack["apps"])[app])
 
 
-Rows = dict[str, dict[str, dict[str, str]]]
+def _records(pack: dict[str, object], app: str, table: str) -> dict[str, dict[str, str]]:
+    return cast(dict[str, dict[str, str]], cast(dict[str, object], _app(pack, app)["records"]).get(table, {}))
 
 
-class LineState(NamedTuple):
-    lineno: int
-    raw: str
-    indent: int
-    key: str
-    value: str
-    section: str
-    table: str
-    record: str
+def _known(pack: dict[str, object], app: str, table: str) -> set[str]:
+    return {str(item["name"]) for item in list_fields(pack, app, table)}
 
 
-def walk(lines: list[str]) -> Iterator[LineState]:
-    """逐行产出缩进状态；section ∈ {meta, data, skip}，空白行不产出。"""
-    section = table = record = ""
-    for lineno, raw in enumerate(lines, start=1):
-        line = clean_line(raw)
-        if not line.strip():
-            continue
-        indent = len(line) - len(line.lstrip(" "))
-        key, value = split_pair(line.strip(), lineno)
-        if indent == 0:
-            section = "data" if key == "data" else ("meta" if value else "skip")
-            table = record = ""
-        elif section == "data":
-            if indent == 2:
-                table, record = key, ""
-            elif indent == 4:
-                record = key
-        yield LineState(lineno, raw, indent, key, value, section, table, record)
+def _is_placeholder(value: str) -> bool:
+    text = value.strip()
+    return not text or text.upper().startswith("TODO") or (text.startswith("<") and text.endswith(">"))
 
 
-def load_data(path: str) -> dict[str, object]:
-    """只读 meta 与 data 段；source / members 等其它顶层块整块忽略。"""
-    file = Path(path).expanduser().resolve()
-    if not file.is_file():
-        raise DataError("找不到基础数据：{}".format(file))
-    meta: dict[str, str] = {}
-    data: Rows = {}
-    for s in walk(file.read_text(encoding="utf-8").splitlines()):
-        if s.section == "meta":
-            meta[s.key] = s.value
-        elif s.section == "data" and s.indent > 0:
-            if s.indent == 2:
-                if s.value:
-                    raise DataError("第 {} 行表名不应带值：{}".format(s.lineno, s.key))
-                if s.key in data:
-                    raise DataError("第 {} 行重复表：{}".format(s.lineno, s.key))
-                data[s.key] = {}
-            elif s.indent == 4:
-                if not s.table or s.value:
-                    raise DataError("第 {} 行记录格式错误：{}".format(s.lineno, s.key))
-                if s.key in data[s.table]:
-                    raise DataError("第 {} 行重复记录：{}".format(s.lineno, s.key))
-                data[s.table][s.key] = {}
-            elif s.indent == 6:
-                if not s.record:
-                    raise DataError("第 {} 行字段没有所属记录：{}".format(s.lineno, s.key))
-                if not s.value:
-                    raise DataError("第 {} 行字段缺少值：{}".format(s.lineno, s.key))
-                if s.key in data[s.table][s.record]:
-                    raise DataError("第 {} 行重复字段：{}".format(s.lineno, s.key))
-                data[s.table][s.record][s.key] = s.value
-            else:
-                raise DataError("第 {} 行缩进须为 2/4/6 空格".format(s.lineno))
-    if not meta.get("team_code"):
-        raise DataError("基础数据缺少 team_code")
-    return {"meta": meta, "data": data}
-
-
-def known_fields(schema_path: str, table: str) -> set[str]:
-    try:
-        schema = load_schema(schema_path)
-    except SchemaError as err:
-        raise DataError(str(err)) from err
-    if table not in schema["tables"]:
-        raise DataError("表头元数据中不存在表：{}".format(table))
-    return {cast(str, item["name"]) for item in list_fields(schema, table)}
+def _ensure_writable(pack: dict[str, object], app: str) -> None:
+    name = str(_app(pack, app)["app_name"])
+    if _is_placeholder(name):
+        raise DataError("应用 {} 的 app_name 仍为占位符 {}，禁止写入；请先落盘真实编码".format(app, name))
 
 
 def format_value(new_value: str) -> str:
@@ -109,11 +46,10 @@ def format_value(new_value: str) -> str:
     return '"{}"'.format(new_value)
 
 
-def query(dataset: dict[str, object], table: str, where: list[str], fields: list[str], schema_path: str) -> list[dict[str, object]]:
-    data = cast(Rows, dataset["data"])
-    if table not in data:
-        raise DataError("未知表 {}。可用表：{}".format(table, ", ".join(data)))
-    known = known_fields(schema_path, table)
+def query(pack: dict[str, object], app: str, table: str, where: list[str], fields: list[str]) -> list[dict[str, object]]:
+    a = resolve_app(pack, app)
+    t = resolve_table(pack, a, table)
+    known = _known(pack, a, t)
     conditions: list[tuple[str, str]] = []
     for raw in where:
         if "=" not in raw:
@@ -123,70 +59,65 @@ def query(dataset: dict[str, object], table: str, where: list[str], fields: list
     selected = fields or None
     for name in [key for key, _ in conditions] + (selected or []):
         if name not in known:
-            raise DataError("字段 {} 不在表头元数据中：{}".format(name, table))
+            raise DataError("字段 {} 不在应用 {} 的表 {} 表头元数据中".format(name, a, t))
     result: list[dict[str, object]] = []
-    for record_id, row in data[table].items():
+    for record_id, row in _records(pack, a, t).items():
         if all(row.get(name) == value for name, value in conditions):
             picked = {key: row[key] for key in selected if key in row} if selected else dict(row)
             result.append({"record_id": record_id, "fields": picked})
     return result
 
 
-def mutate(path: str, table: str, record: str, sets: list[str], delete: bool, schema_path: str) -> dict[str, object]:
-    file = Path(path).expanduser().resolve()
-    dataset = load_data(str(file))
-    data = cast(Rows, dataset["data"])
-    if table not in data:
-        raise DataError("未知表：{}。可用表：{}".format(table, ", ".join(data)))
-    if record not in data[table]:
-        raise DataError("表 {} 中不存在记录：{}。可用记录：{}".format(table, record, ", ".join(data[table])))
+def mutate(path: str, pack: dict[str, object], app: str, table: str, record: str, sets: list[str], delete: bool) -> dict[str, object]:
+    a = resolve_app(pack, app)
+    t = resolve_table(pack, a, table)
+    _ensure_writable(pack, a)
+    rows = _records(pack, a, t)
+    if record not in rows:
+        raise DataError("应用 {} 的表 {} 中不存在记录：{}。可用记录：{}".format(a, t, record, ", ".join(rows)))
 
     changes: dict[str, str] = {}
     if not delete:
-        known = known_fields(schema_path, table)
+        known = _known(pack, a, t)
         for raw in sets:
             if "=" not in raw:
                 raise DataError("--set 格式应为 字段=值：{}".format(raw))
             name, value = raw.split("=", 1)
             name = name.strip()
             if name not in known:
-                raise DataError("字段 {} 不在表头元数据中：{}".format(name, table))
-            if name not in data[table][record]:
+                raise DataError("字段 {} 不在表头元数据中：{}".format(name, t))
+            if name not in rows[record]:
                 raise DataError("记录 {} 中没有字段 {}，不可新增字段".format(record, name))
             changes[name] = format_value(value.strip())
 
-    lines = file.read_text(encoding="utf-8").splitlines()
-    states = {s.lineno: s for s in walk(lines)}
     out: list[str] = []
     applied: dict[str, str] = {}
-    for lineno, raw in enumerate(lines, start=1):
-        s = states.get(lineno)
-        if not s or s.section != "data" or s.indent <= 0:
-            out.append(raw)
+    for s in iter_lines(Path(path).read_text(encoding="utf-8").splitlines()):
+        if s.section != "apps" or s.skip or s.app != a or s.table != t or s.subsection != "records":
+            out.append(s.raw)
             continue
-        if s.indent == 4 and delete and s.table == table and s.record == record:
+        if s.indent == 8 and delete and s.record == record:
             continue
-        if s.indent == 6 and s.table == table and s.record == record:
+        if s.indent == 10 and s.record == record:
             if delete:
                 continue
             if s.key in changes:
-                out.append(raw[:raw.index(":")] + ": " + changes[s.key])
+                out.append(s.raw[:s.raw.index(":")] + ": " + changes[s.key])
                 applied[s.key] = unquote(changes[s.key])
                 continue
-        out.append(raw)
+        out.append(s.raw)
 
     if not delete:
         for name in changes:
             if name not in applied:
                 raise DataError("记录 {} 中字段 {} 未被改写".format(record, name))
-    file.write_text("\n".join(out) + "\n", encoding="utf-8")
-    return {"team_code": dataset["meta"]["team_code"], "table": table, "record": record,
-            "deleted": delete, "changed": applied}
+    Path(path).write_text("\n".join(out) + "\n", encoding="utf-8")
+    return {"team_code": pack["meta"]["team_code"], "app": a, "table": t,
+            "record": record, "deleted": delete, "changed": applied}
 
 
-def _next_ids(existing: Rows, table: str, count: int, prefix: str = "rec") -> list[str]:
-    """按已有记录的最大序号续编；新表用 prefix 作前缀。"""
-    names = list(existing.get(table, {}))
+def _next_ids(existing: dict[str, dict[str, str]], count: int, prefix: str = "rec") -> list[str]:
+    names = list(existing)
     used = {int(m.group(1)) for name in names if (m := re.search(r"(\d+)$", name))}
     number = max(used, default=0)
     result: list[str] = []
@@ -197,39 +128,27 @@ def _next_ids(existing: Rows, table: str, count: int, prefix: str = "rec") -> li
     return result
 
 
-def _data_insert_position(lines: list[str], table: str) -> tuple[int, bool]:
-    """返回 (插入行号, 表是否已存在)；无 data 段时返回文件末尾。"""
-    data_end: int | None = None
-    insert_at: int | None = None
-    seen_data = False
-    for s in walk(lines):
-        if s.section == "data":
-            seen_data = True
-            if s.indent == 0:
-                continue
-            data_end = s.lineno  # 1 基行号即该行之后的插入下标
-            if s.indent == 2 and s.key == table:
-                insert_at = s.lineno
-            elif insert_at is not None and s.indent in (4, 6) and s.table == table:
-                insert_at = s.lineno
-        elif seen_data and data_end is None:
-            data_end = s.lineno - 1
-    if insert_at is not None:
-        return insert_at, True
-    return (data_end if data_end is not None else len(lines)), False
+def _data_insert_position(lines: list[str], app: str, table: str) -> int:
+    position: int | None = None
+    for s in iter_lines(lines):
+        if s.section == "apps" and not s.skip and s.app == app and s.subsection == "records" and s.table == table:
+            if s.indent in (6, 8, 10):
+                position = s.lineno
+    if position is None:
+        raise DataError("语义包中没有应用 {} 的表 {}，请先在 records 中登记该表".format(app, table))
+    return position
 
 
-def append(path: str, schema: str, table: str, items: list[str]) -> dict[str, object]:
-    """按表追加记录；字段须在表头元数据中存在，记录 ID 自动生成。"""
-    file = Path(path).expanduser().resolve()
-    dataset = load_data(str(file))
-    data = cast(Rows, dataset["data"])
-    known = known_fields(schema, table)
+def append(path: str, app: str, table: str, items: list[str]) -> dict[str, object]:
+    """向指定应用的表追加记录；字段须在该应用表头元数据中存在，记录 ID 自动生成。"""
+    pack = load_pack(path)
+    a = resolve_app(pack, app)
+    t = resolve_table(pack, a, table)
+    _ensure_writable(pack, a)
+    known = _known(pack, a, t)
 
     rows: list[dict[str, str]] = []
     for raw in items:
-        if "=" not in raw:
-            raise DataError("--set 格式应为 字段=值：{}".format(raw))
         fields: dict[str, str] = {}
         for pair in raw.split("|"):
             if "=" not in pair:
@@ -237,33 +156,45 @@ def append(path: str, schema: str, table: str, items: list[str]) -> dict[str, ob
             name, value = pair.split("=", 1)
             name = name.strip()
             if name not in known:
-                raise DataError("字段 {} 不在表头元数据中：{}".format(name, table))
+                raise DataError("字段 {} 不在应用 {} 的表 {} 表头元数据中".format(name, a, t))
             fields[name] = format_value(value.strip())
         rows.append(fields)
 
-    ids = _next_ids(data, table, len(rows))
+    ids = _next_ids(_records(pack, a, t), len(rows))
     rendered: list[str] = []
     for record_id, fields in zip(ids, rows):
-        rendered.append("    {}:".format(record_id))
-        rendered.extend("      {}: {}".format(name, value) for name, value in fields.items())
+        rendered.append("        {}:".format(record_id))
+        rendered.extend("          {}: {}".format(name, value) for name, value in fields.items())
 
+    file = Path(path).expanduser().resolve()
     lines = file.read_text(encoding="utf-8").splitlines()
-    position, exists = _data_insert_position(lines, table)
-    has_data = any(clean_line(line).strip() == "data:" for line in lines)
-    block = rendered if exists else ["  {}:".format(table)] + rendered
-    if not has_data:
-        block = ["", "data:"] + block
-        position = len(lines)
-    lines[position:position] = block
+    insert_at = _data_insert_position(lines, a, t)
+    lines[insert_at:insert_at] = rendered
     file.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return {"team_code": dataset["meta"]["team_code"], "table": table, "added": len(rows), "records": ids}
+    return {"team_code": pack["meta"]["team_code"], "app": a, "table": t, "added": len(rows), "records": ids}
+
+
+def _print_apps(pack: dict[str, object]) -> None:
+    payload = []
+    for app, item in cast(dict[str, object], pack["apps"]).items():
+        records = cast(dict[str, object], item["records"])
+        payload.append({
+            "app": app,
+            "app_name": item["app_name"],
+            "tables": [
+                {"name": name, "records": len(cast(dict[str, object], records.get(name, {})))}
+                for name in cast(dict[str, object], item["tables"])
+            ],
+        })
+    print(json.dumps({"team_code": pack["meta"]["team_code"], "apps": payload}, ensure_ascii=False, indent=2))
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="本地基础数据维护（查 / 改 / 删）")
-    parser.add_argument("--data", default=str(DEFAULT_DATA), help="基础数据 YAML 路径")
-    parser.add_argument("--schema", default=str(DEFAULT_SCHEMA), help="表头元数据路径（字段校验）")
-    parser.add_argument("--list-tables", action="store_true", help="列出本地表与记录数")
+    parser = argparse.ArgumentParser(description="语义包数据维护（查 / 改 / 删）")
+    parser.add_argument("--pack", default=str(DEFAULT_PACK), help="语义包 YAML 路径（表头元数据 + 本地记录）")
+    parser.add_argument("--list-apps", action="store_true", help="列出应用、app_name 及各表记录数")
+    parser.add_argument("--list-tables", action="store_true", help="列出表与记录数；带 --app 时只列该应用")
+    parser.add_argument("--app", default="", help="应用名（本地应用名或 app_name）")
     parser.add_argument("--table", default="", help="表名")
     parser.add_argument("--record", default="", help="记录 ID（改 / 删必填）")
     parser.add_argument("--where", action="append", default=[], metavar="字段=值", help="过滤条件，可重复，AND")
@@ -275,30 +206,44 @@ def main() -> None:
     sets = [item for group in args.sets for item in group]
 
     try:
+        pack = load_pack(args.pack)
+        if args.list_apps:
+            if args.app or args.table or args.where or fields or sets or args.delete:
+                raise DataError("--list-apps 不能与其它操作参数同时使用")
+            _print_apps(pack)
+            return
+        if args.list_tables:
+            if args.table or args.where or fields or sets or args.delete:
+                raise DataError("--list-tables 不能与表/记录操作参数同时使用")
+            if args.app:
+                app = resolve_app(pack, args.app)
+                apps = {app: cast(dict[str, object], cast(dict[str, object], pack["apps"])[app])}
+            else:
+                apps = cast(dict[str, object], pack["apps"])
+            payload = [
+                {"app": app, "tables": [
+                    {"name": name, "records": len(cast(dict[str, object], cast(dict[str, object], item["records"]).get(name, {})))}
+                    for name in cast(dict[str, object], item["tables"])
+                ]}
+                for app, item in apps.items()
+            ]
+            print(json.dumps({"team_code": pack["meta"]["team_code"], "apps": payload}, ensure_ascii=False, indent=2))
+            return
         if args.delete and sets:
             raise DataError("--delete 与 --set 互斥，不能同时使用")
-        if args.list_tables and (args.table or args.where or fields or sets or args.delete):
-            raise DataError("--list-tables 不能与其它操作参数同时使用")
-        dataset = load_data(args.data)
-        meta = cast(dict[str, str], dataset["meta"])
-        if args.list_tables:
-            data = cast(Rows, dataset["data"])
-            tables = [{"name": name, "records": len(rows)} for name, rows in data.items()]
-            print(json.dumps({"team_code": meta["team_code"], "tables": tables}, ensure_ascii=False, indent=2))
-            return
+        if not args.app:
+            raise DataError("需要 --app 指定应用（可用 --list-apps 查看）")
         if not args.table:
-            raise DataError("需要 --table 或 --list-tables")
+            raise DataError("需要 --table 指定该应用下的表")
         if args.delete or sets:
             if not args.record:
                 raise DataError("改 / 删需要 --record 指定记录 ID")
-            result = mutate(args.data, args.table, args.record, sets, args.delete, args.schema)
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-            return
-        records = query(dataset, args.table, args.where, fields, args.schema)
-        print(json.dumps(
-            {"team_code": meta["team_code"], "table": args.table, "count": len(records), "records": records},
-            ensure_ascii=False, indent=2,
-        ))
+            result = mutate(args.pack, pack, args.app, args.table, args.record, sets, args.delete)
+        else:
+            records = query(pack, args.app, args.table, args.where, fields)
+            result = {"team_code": pack["meta"]["team_code"], "app": args.app, "table": args.table,
+                      "count": len(records), "records": records}
+        print(json.dumps(result, ensure_ascii=False, indent=2))
     except (DataError, OSError) as err:
         print("参数错误：{}".format(err), file=sys.stderr)
         sys.exit(2)

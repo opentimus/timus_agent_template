@@ -34,10 +34,9 @@ def _is_placeholder(value: str) -> bool:
     return not text or text.upper().startswith("TODO") or (text.startswith("<") and text.endswith(">"))
 
 
-def _ensure_writable(pack: dict[str, object], app: str) -> None:
-    name = str(_app(pack, app)["app_name"])
-    if _is_placeholder(name):
-        raise DataError("应用 {} 的 app_name 仍为占位符 {}，禁止写入；请先落盘真实编码".format(app, name))
+def _ensure_writable(app: str) -> None:
+    if _is_placeholder(app):
+        raise DataError("应用名 {} 仍为占位符，禁止写入；请先落盘真实编码".format(app))
 
 
 def format_value(new_value: str) -> str:
@@ -71,7 +70,7 @@ def query(pack: dict[str, object], app: str, table: str, where: list[str], field
 def mutate(path: str, pack: dict[str, object], app: str, table: str, record: str, sets: list[str], delete: bool) -> dict[str, object]:
     a = resolve_app(pack, app)
     t = resolve_table(pack, a, table)
-    _ensure_writable(pack, a)
+    _ensure_writable(a)
     rows = _records(pack, a, t)
     if record not in rows:
         raise DataError("应用 {} 的表 {} 中不存在记录：{}。可用记录：{}".format(a, t, record, ", ".join(rows)))
@@ -112,8 +111,7 @@ def mutate(path: str, pack: dict[str, object], app: str, table: str, record: str
             if name not in applied:
                 raise DataError("记录 {} 中字段 {} 未被改写".format(record, name))
     Path(path).write_text("\n".join(out) + "\n", encoding="utf-8")
-    return {"team_code": pack["meta"]["team_code"], "app": a, "table": t,
-            "record": record, "deleted": delete, "changed": applied}
+    return {"app": a, "table": t, "record": record, "deleted": delete, "changed": applied}
 
 
 def _next_ids(existing: dict[str, dict[str, str]], count: int, prefix: str = "rec") -> list[str]:
@@ -144,7 +142,7 @@ def append(path: str, app: str, table: str, items: list[str]) -> dict[str, objec
     pack = load_pack(path)
     a = resolve_app(pack, app)
     t = resolve_table(pack, a, table)
-    _ensure_writable(pack, a)
+    _ensure_writable(a)
     known = _known(pack, a, t)
 
     rows: list[dict[str, str]] = []
@@ -171,7 +169,7 @@ def append(path: str, app: str, table: str, items: list[str]) -> dict[str, objec
     insert_at = _data_insert_position(lines, a, t)
     lines[insert_at:insert_at] = rendered
     file.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return {"team_code": pack["meta"]["team_code"], "app": a, "table": t, "added": len(rows), "records": ids}
+    return {"app": a, "table": t, "added": len(rows), "records": ids}
 
 
 def _print_apps(pack: dict[str, object]) -> None:
@@ -180,21 +178,20 @@ def _print_apps(pack: dict[str, object]) -> None:
         records = cast(dict[str, object], item["records"])
         payload.append({
             "app": app,
-            "app_name": item["app_name"],
             "tables": [
                 {"name": name, "records": len(cast(dict[str, object], records.get(name, {})))}
                 for name in cast(dict[str, object], item["tables"])
             ],
         })
-    print(json.dumps({"team_code": pack["meta"]["team_code"], "apps": payload}, ensure_ascii=False, indent=2))
+    print(json.dumps({"apps": payload}, ensure_ascii=False, indent=2))
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="语义包数据维护（查 / 改 / 删）")
     parser.add_argument("--pack", default=str(DEFAULT_PACK), help="语义包 YAML 路径（表头元数据 + 本地记录）")
-    parser.add_argument("--list-apps", action="store_true", help="列出应用、app_name 及各表记录数")
+    parser.add_argument("--list-apps", action="store_true", help="列出应用及各表记录数")
     parser.add_argument("--list-tables", action="store_true", help="列出表与记录数；带 --app 时只列该应用")
-    parser.add_argument("--app", default="", help="应用名（本地应用名或 app_name）")
+    parser.add_argument("--app", default="", help="应用名")
     parser.add_argument("--table", default="", help="表名")
     parser.add_argument("--record", default="", help="记录 ID（改 / 删必填）")
     parser.add_argument("--where", action="append", default=[], metavar="字段=值", help="过滤条件，可重复，AND")
@@ -227,7 +224,7 @@ def main() -> None:
                 ]}
                 for app, item in apps.items()
             ]
-            print(json.dumps({"team_code": pack["meta"]["team_code"], "apps": payload}, ensure_ascii=False, indent=2))
+            print(json.dumps({"apps": payload}, ensure_ascii=False, indent=2))
             return
         if args.delete and sets:
             raise DataError("--delete 与 --set 互斥，不能同时使用")
@@ -240,9 +237,9 @@ def main() -> None:
                 raise DataError("改 / 删需要 --record 指定记录 ID")
             result = mutate(args.pack, pack, args.app, args.table, args.record, sets, args.delete)
         else:
-            records = query(pack, args.app, args.table, args.where, fields)
-            result = {"team_code": pack["meta"]["team_code"], "app": args.app, "table": args.table,
-                      "count": len(records), "records": records}
+            a = resolve_app(pack, args.app)
+            records = query(pack, a, args.table, args.where, fields)
+            result = {"app": a, "table": args.table, "count": len(records), "records": records}
         print(json.dumps(result, ensure_ascii=False, indent=2))
     except (DataError, OSError) as err:
         print("参数错误：{}".format(err), file=sys.stderr)

@@ -11,10 +11,10 @@ agent_created: true
 
 ## 语义包结构
 
-- 层级：`apps` → 应用 → `app_name` + `tables`（表名 → `tbl...`）+ `fields`（表 → 字段: 类型）+ `records`（表 → 记录 ID → 字段: 值）。
+- 层级：`apps` → 应用名（即 `app_name`）→ `tables`（表名 → `tbl...`）+ `fields`（表 → 字段: 类型@策略）+ `records`（表 → 记录 ID → 字段: 值）。
 - `tables` / `fields` / `records` 归属当前应用，`fields` / `records` 再归属当前表；`tbl...` 仅追溯，禁入参数。
 - 字段名是平台内部标识（`S.客户`），逐字使用；未登记时按 `timus-runtime` 样本记录法取 `payloadFieldList[].name` 核对后落盘。
-- 可写性由 `type_policy` 定：只读 `AutoNumber` / `CreatedTime` / `Lookup` / `Formula`；可写 `Text` / `Number` / `SingleSelect` / `DateTime` / `User`。`User` 值须为 `open_id`（取自应用 `members` 快照），禁姓名 / 邮箱。
+- 字段写作 `类型@策略`；策略省略取 `type_policy` 默认（`AutoNumber` / `CreatedTime` / `Lookup` / `Formula` 只读，其余可写），可逐字段覆盖。`User` 值须为 `open_id`（取自应用 `members` 快照），禁姓名 / 邮箱。
 - 占位符（`TODO*` / `<...>`）禁写入，先索取落盘。
 - 取值先本地后远程：本地命中直接用；未命中再走 `timus-runtime`；远程新记录按需落盘复用，不伪造远程结果。
 

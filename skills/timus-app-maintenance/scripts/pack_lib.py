@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import NamedTuple, cast
 
 SECTION_KEYS = ("type_policy", "apps")
-APP_KEYS = ("app_name", "tables", "fields", "records", "members")
+APP_KEYS = ("tables", "fields", "records", "members")
 VALID_POLICIES = ("read_only", "writable")
 
 
@@ -48,6 +48,22 @@ def _put(mapping: dict[str, str], key: str, value: str, lineno: int) -> None:
     if key in mapping:
         raise PackError("第 {} 行出现重复键：{}".format(lineno, key))
     mapping[key] = value
+
+
+def field_spec(value: str, type_policy: dict[str, str], lineno: int) -> str:
+    """字段写作 类型@策略；省略策略时取 type_policy 默认。"""
+    parts = value.split("@")
+    if len(parts) > 2:
+        raise PackError("第 {} 行字段格式应为 类型@策略：{}".format(lineno, value))
+    field_type = parts[0].strip()
+    if not field_type or field_type not in type_policy:
+        raise PackError("第 {} 行字段类型 {} 未在 type_policy 中声明".format(lineno, field_type))
+    if len(parts) == 1:
+        return "{}@{}".format(field_type, type_policy[field_type])
+    policy = parts[1].strip()
+    if policy not in VALID_POLICIES:
+        raise PackError("第 {} 行字段策略必须是 read_only 或 writable：{}".format(lineno, policy))
+    return "{}@{}".format(field_type, policy)
 
 
 def resolve_name(mapping: dict[str, str], name: str, kind: str) -> str:
@@ -137,13 +153,7 @@ def load_pack(path: str) -> dict[str, object]:
                     raise PackError("第 {} 行应用名 {} 不应带值".format(s.lineno, s.key))
                 if s.key in apps:
                     raise PackError("第 {} 行重复应用：{}".format(s.lineno, s.key))
-                apps[s.key] = {"app_name": "", "tables": {}, "fields": {}, "records": {}}
-            elif s.indent == 4:
-                item = apps[s.app]
-                if s.key == "app_name":
-                    if not s.value:
-                        raise PackError("第 {} 行应用 {} 缺少 app_name".format(s.lineno, s.app))
-                    item["app_name"] = s.value
+                apps[s.key] = {"tables": {}, "fields": {}, "records": {}}
             elif s.indent == 6 and s.subsection in ("tables", "fields", "records"):
                 item = apps[s.app]
                 container = cast_dict(item[s.subsection])
@@ -160,13 +170,16 @@ def load_pack(path: str) -> dict[str, object]:
                         raise PackError("第 {} 行重复表：{}".format(s.lineno, s.key))
                     container[s.key] = {}
             elif s.indent == 8 and s.subsection == "fields":
-                cast_dict(cast_dict(apps[s.app]["fields"])[s.table])[s.key] = s.value
+                fields_table = cast_dict(cast_dict(apps[s.app]["fields"])[s.table])
+                if s.key in fields_table:
+                    raise PackError("第 {} 行重复字段：{}".format(s.lineno, s.key))
+                fields_table[s.key] = field_spec(s.value, type_policy, s.lineno)
             elif s.indent == 8 and s.subsection == "records":
                 cast_dict(cast_dict(apps[s.app]["records"])[s.table])[s.key] = {}
             elif s.indent == 10 and s.subsection == "records":
                 cast_dict(cast_dict(cast_dict(apps[s.app]["records"])[s.table])[s.record])[s.key] = s.value
 
-    for key in ("schema_version", "team_code", "connector"):
+    for key in ("schema_version", "connector"):
         if not meta.get(key):
             raise PackError("语义包缺少顶层键：{}".format(key))
     if not type_policy:
@@ -174,12 +187,9 @@ def load_pack(path: str) -> dict[str, object]:
     if not apps:
         raise PackError("语义包缺少 apps 块，且至少需登记一个应用")
     for app, item in apps.items():
-        name = str(item["app_name"] or "")
         tables = cast_dict(item["tables"])
         fields = cast_dict(item["fields"])
         records = cast_dict(item["records"])
-        if not name:
-            raise PackError("应用 {} 缺少 app_name".format(app))
         if not tables or not fields:
             raise PackError("应用 {} 必须同时登记 tables 与 fields".format(app))
         if set(tables) != set(fields):
@@ -187,9 +197,6 @@ def load_pack(path: str) -> dict[str, object]:
         for table, table_fields in fields.items():
             if not table_fields:
                 raise PackError("应用 {} 的表 {} 没有任何字段".format(app, table))
-            for field_type in cast_dict(table_fields).values():
-                if field_type not in type_policy:
-                    raise PackError("应用 {} 的表 {} 字段类型 {} 未在 type_policy 中声明".format(app, table, field_type))
         for table in records:
             if table not in tables:
                 raise PackError("应用 {} 的 records 表 {} 未在 tables 中登记".format(app, table))
@@ -200,12 +207,8 @@ def cast_dict(value: object) -> dict[str, object]:
     return cast(dict[str, object], value)
 
 
-def app_names(pack: dict[str, object]) -> dict[str, str]:
-    return {name: str(cast(dict[str, object], item)["app_name"]) for name, item in cast_dict(pack["apps"]).items()}
-
-
 def resolve_app(pack: dict[str, object], app: str) -> str:
-    return resolve_name(app_names(pack), app, "应用")
+    return resolve_name({name: "" for name in cast_dict(pack["apps"])}, app, "应用")
 
 
 def resolve_table(pack: dict[str, object], app: str, table: str) -> str:
@@ -215,8 +218,8 @@ def resolve_table(pack: dict[str, object], app: str, table: str) -> str:
 
 def list_fields(pack: dict[str, object], app: str, table: str) -> list[dict[str, object]]:
     fields = cast_dict(cast_dict(cast_dict(pack["apps"])[app])["fields"])
-    policy = cast_dict(pack["type_policy"])
-    return [
-        {"name": name, "type": field_type, "writable": policy.get(str(field_type)) == "writable"}
-        for name, field_type in cast_dict(fields[table]).items()
-    ]
+    result = []
+    for name, value in cast_dict(fields[table]).items():
+        field_type, policy = str(value).split("@", 1)
+        result.append({"name": name, "type": field_type, "writable": policy == "writable"})
+    return result

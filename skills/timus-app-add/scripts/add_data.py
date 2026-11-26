@@ -19,7 +19,7 @@ DEFAULT_PACK = SKILLS / "timus-app-maintenance" / "references" / "timus-team.yam
 def main() -> None:
     parser = argparse.ArgumentParser(description="批量添加本地基础数据")
     parser.add_argument("--pack", default=str(DEFAULT_PACK), help="语义包 YAML 路径（表头元数据 + 本地记录）")
-    parser.add_argument("--app", required=True, help="目标应用（本地应用名或 app_name）")
+    parser.add_argument("--app", required=True, help="目标应用名")
     parser.add_argument("--table", required=True, help="目标应用下的表")
     parser.add_argument("--set", dest="items", action="append", required=True,
                         metavar="字段=值|字段=值", help="一条记录；可重复多条")

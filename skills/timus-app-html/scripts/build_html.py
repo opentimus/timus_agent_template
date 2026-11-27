@@ -13,7 +13,10 @@ DEFAULT_TEMPLATE = HERE.parent / "assets" / "app.html.tpl"
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="生成 Timus 数据页面")
+    parser = argparse.ArgumentParser(
+        description="生成 Timus 数据页面",
+        epilog="payload: {title, columns:[{key,label?}], rows:[{}], subtitle?, badges?, editable?, tableTitle?, tableHint?, note?}",
+    )
     parser.add_argument("--payload", required=True, help="页面数据 JSON")
     parser.add_argument("--output", required=True, help="输出 HTML 路径")
     parser.add_argument("--template", default=str(DEFAULT_TEMPLATE), help="模板路径")
@@ -34,13 +37,16 @@ def main() -> int:
     if not isinstance(rows, list) or not isinstance(columns, list):
         print("rows / columns 须为数组", file=sys.stderr)
         return 2
+    if not all(isinstance(c, dict) and isinstance(c.get("key"), str) and c["key"] for c in columns):
+        print("columns[] 每项须含非空字符串 key", file=sys.stderr)
+        return 2
 
     data = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
     page = template.replace("__TITLE__", html.escape(str(payload["title"]))).replace("__DATA_JSON__", data)
     output = Path(args.output).expanduser().resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(page, encoding="utf-8")
-    print("已生成 {}（{} 行）".format(output, len(rows)))
+    print(json.dumps({"output": str(output), "rows": len(rows)}, ensure_ascii=False))
     return 0
 
 

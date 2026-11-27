@@ -79,7 +79,7 @@
 
 <div class="bar">
   <span class="summary" id="barSummary"></span>
-  <button class="primary" id="btnExport">导出 JSON</button>
+  <button class="primary" id="btnExport">提交</button>
   <button class="ghost" id="btnClose">关闭</button>
 </div>
 
@@ -125,7 +125,11 @@ $("tbody").addEventListener("input", event => {
   if (!input) return;
   rows[+input.dataset.i][input.dataset.k] = input.value;
 });
-$("btnExport").onclick = exportJson;
+$("btnExport").onclick = () => {
+  const data = payload();
+  if (typeof window.timusAdd === "function") { window.timusAdd(data); return; }
+  exportJson();
+};
 $("btnClose").onclick = () => window.close();
 render();
 </script>

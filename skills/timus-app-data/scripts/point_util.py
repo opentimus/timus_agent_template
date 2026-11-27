@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""数值口径：normalize 两位小数、split 按权重拆分（Σ 严格相等）、next-pair / next-batch 流水号。纯标准库，stdout JSON，失败 stderr 中文原因 + exit 2。用法见 timus-app-maintenance/SKILL.md。"""
+"""数值口径：两位小数、按权重拆分（Σ 严格相等）与流水号。参数见 -h。"""
 
 from __future__ import annotations
 
@@ -11,8 +11,7 @@ import time
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 CENT = Decimal("0.01")
-MIN_POINT = Decimal("0.01")
-# 点数原始输入的合法形态：正数，可带小数；不接受正负号、0 开头以外的特殊写法、科学计数法。
+# 点数原始输入的合法形态：正数，可带小数；不接受正负号、科学计数法。
 RAW_PATTERN = re.compile(r"\d+(?:\.\d+)?|\.\d+")
 
 
@@ -28,7 +27,6 @@ def _check_prefix(prefix: str) -> str:
 
 
 def _decimal_cents(raw: str) -> Decimal:
-    """校验并归一化到分，返回 Decimal。"""
     text = (raw or "").strip()
     if not text:
         raise PointError("点数不能为空")
@@ -44,15 +42,8 @@ def _decimal_cents(raw: str) -> Decimal:
 
 
 def normalize(raw: str) -> dict[str, object]:
-    """把任意合法正数输入归一化为两位小数口径。"""
-    text = (raw or "").strip()
     cents = _decimal_cents(raw)
-    return {
-        "raw": text,
-        "value": float(cents),
-        "text": "{:.2f}".format(cents),
-        "cents": int((cents * 100).to_integral_value()),
-    }
+    return {"text": "{:.2f}".format(cents), "cents": int((cents * 100).to_integral_value())}
 
 
 def split(total: str, weights: list[str]) -> dict[str, object]:
@@ -85,24 +76,18 @@ def split(total: str, weights: list[str]) -> dict[str, object]:
                 "第 {} 条拆分后为 {}，低于最小可写点数 0.01。"
                 "请提高总估点、减少任务数或调整权重，本次不写入。".format(item["index"], "{:.2f}".format(cents / 100))
             )
-        item["value"] = cents / 100
         item["text"] = "{:.2f}".format(cents / 100)
 
-    total_out = sum(int(i["cents"]) for i in items)
+    return {"total": "{:.2f}".format(total_cents), "items": items}
 
-    return {
-        "total": float(total_cents),
-        "total_text": "{:.2f}".format(total_cents),
-        "count": len(items),
-        "sum": "{:.2f}".format(total_out / 100),
-        "items": items,
-    }
+
+def _stamp(prefix: str) -> tuple[str, int]:
+    return _check_prefix(prefix), int(time.time() * 1000)
 
 
 def next_pair(prefix: str) -> dict[str, str]:
     """生成一对相邻流水号：主号 = 前缀 + 毫秒，尾号 = 主号数值 +1。"""
-    name = _check_prefix(prefix)
-    stamp = int(time.time() * 1000)
+    name, stamp = _stamp(prefix)
     return {
         "prefix": name,
         "primary": "{}-{}".format(name, stamp),
@@ -112,10 +97,9 @@ def next_pair(prefix: str) -> dict[str, str]:
 
 def next_batch(prefix: str, count: int) -> dict[str, object]:
     """生成同前缀、同毫秒、序号递增的流水号批次（-01、-02…）。"""
-    name = _check_prefix(prefix)
+    name, stamp = _stamp(prefix)
     if count < 1:
         raise PointError("批次数至少为 1，收到：{}".format(count))
-    stamp = int(time.time() * 1000)
     return {
         "prefix": name,
         "stamp": str(stamp),

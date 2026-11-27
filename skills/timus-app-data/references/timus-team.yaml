@@ -1,19 +1,7 @@
-# 语义包：表头元数据 + 本地记录。换应用时改 apps 下应用名 / language / tables / fields；tbl... 仅追溯。
-# 层级：apps → 应用名(app_name) → language + tables + fields + records；tables / fields / records 用稳定 ID，tables.<表>.platform[language] 与 fields.<表>.<字段>.platform[language] 用于请求。
+# 语义包：apps → 应用名 → language / tables / fields / records；表、字段、记录用稳定 ID，platform[language] 供请求。
 
 schema_version: "1.0.0"
 connector: timus-runtime
-
-type_policy:
-  AutoNumber: read_only
-  CreatedTime: read_only
-  Lookup: read_only
-  User: writable
-  Formula: read_only
-  Text: writable
-  Number: writable
-  SingleSelect: writable
-  DateTime: writable
 
 apps:
   TODO_APP_A:
@@ -31,13 +19,13 @@ apps:
           type: AutoNumber@read_only
           platform: {zh: S.成员ID, en: sys.member_id}
         sys.member_name:
-          type: Text@writable
+          type: Text
           platform: {zh: S.成员, en: sys.member_name}
         sys.role:
-          type: SingleSelect@writable
+          type: SingleSelect
           platform: {zh: S.角色, en: sys.role}
         sys.user:
-          type: User@writable
+          type: User
           platform: {zh: S.用户, en: sys.user}
         sys.created_at:
           type: CreatedTime@read_only
@@ -47,16 +35,16 @@ apps:
           type: AutoNumber@read_only
           platform: {zh: S.任务ID, en: sys.task_id}
         sys.task_name:
-          type: Text@writable
+          type: Text
           platform: {zh: S.任务名, en: sys.task_name}
         sys.assignee:
-          type: User@writable
+          type: User
           platform: {zh: S.负责人, en: sys.assignee}
         sys.points:
-          type: Number@writable
+          type: Number
           platform: {zh: S.点数, en: sys.points}
         sys.due_at:
-          type: DateTime@writable
+          type: DateTime
           platform: {zh: S.截止时间, en: sys.due_at}
     records:
       member:
@@ -101,38 +89,38 @@ apps:
           type: AutoNumber@read_only
           platform: {zh: S.客户ID, en: sys.customer_id}
         sys.customer_name:
-          type: Text@writable
+          type: Text
           platform: {zh: S.客户, en: sys.customer_name}
         sys.contact:
-          type: Text@writable
+          type: Text
           platform: {zh: S.联系方式, en: sys.contact}
         sys.status:
-          type: SingleSelect@writable
+          type: SingleSelect
           platform: {zh: S.状态, en: sys.status}
         sys.remark:
-          type: Text@writable
+          type: Text
           platform: {zh: S.备注, en: sys.remark}
       order:
         sys.order_no:
-          type: Text@writable
+          type: Text
           platform: {zh: S.订单号, en: sys.order_no}
         sys.customer_id:
-          type: Text@writable
+          type: Text
           platform: {zh: S.客户ID, en: sys.customer_id}
         sys.customer:
           type: Lookup@read_only
           platform: {zh: S.客户, en: sys.customer}
         sys.amount:
-          type: Number@writable
+          type: Number
           platform: {zh: S.金额, en: sys.amount}
         sys.ordered_at:
-          type: DateTime@writable
+          type: DateTime
           platform: {zh: S.下单时间, en: sys.ordered_at}
         sys.status:
-          type: SingleSelect@writable
+          type: SingleSelect
           platform: {zh: S.状态, en: sys.status}
         sys.remark:
-          type: Text@writable
+          type: Text
           platform: {zh: S.备注, en: sys.remark}
     records:
       customer:

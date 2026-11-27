@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""日期口径：options 候选 / batch 多条任务起止 / single 今日→完成日。「第 N 天」1 基计数，DateTime 输出 YYYY-MM-DD HH:mm:ss。纯标准库，stdout JSON。"""
+"""日期换算：第 N 天从 1 起，DateTime 输出 YYYY-MM-DD HH:mm:ss。参数见 -h。"""
 
 from __future__ import annotations
 
@@ -27,6 +27,10 @@ def _label(day: date) -> str:
     return "{} {}".format(_fmt(day), WEEKDAY_CN[day.weekday()])
 
 
+def _day_fields(day: date) -> dict[str, str]:
+    return {"date": _fmt(day), "datetime": _fmt_datetime(day), "label": _label(day)}
+
+
 def _nth_day(base: date, n: int) -> date:
     if n < 1:
         raise ValueError("天数必须 >= 1，收到 {}".format(n))
@@ -47,23 +51,18 @@ def _options(base: date, count: int) -> list[dict[str, object]]:
 
 
 def _range_payload(base: date, start_day: int, end_day: int) -> dict[str, object]:
-    """换算单组第 N 天区间，返回展示字段与写入字段。"""
     start = _nth_day(base, start_day)
     end = _nth_day(base, end_day)
     if end < start:
         raise ValueError(
             "结束日期 {} 早于开始日期 {}，请核对第几天开始/结束".format(_fmt(end), _fmt(start))
         )
-    return {
-        "start_day": start_day,
-        "end_day": end_day,
-        "start_date": _fmt(start),
-        "end_date": _fmt(end),
-        "start_datetime": _fmt_datetime(start),
-        "end_datetime": _fmt_datetime(end),
-        "start_label": _label(start),
-        "end_label": _label(end),
-    }
+    payload: dict[str, object] = {"start_day": start_day, "end_day": end_day}
+    for key, value in _day_fields(start).items():
+        payload["start_" + key] = value
+    for key, value in _day_fields(end).items():
+        payload["end_" + key] = value
+    return payload
 
 
 def _parse_task(raw: str) -> tuple[str, int, int]:
@@ -120,21 +119,14 @@ def main() -> None:
                 item.update(_range_payload(base, start_day, end_day))
                 items.append(item)
             payload = {"start_date": _fmt(base), "count": len(items), "items": items}
-        elif args.command == "single":
+        else:
             base = _parse_day(args.base) if args.base else date.today()
             end = _parse_day(args.end_date)
             if end < base:
                 raise ValueError(
                     "完成日期 {} 早于开始日期 {}，请重新选择完成时间".format(_fmt(end), _fmt(base))
                 )
-            payload = {
-                "start_date": _fmt(base),
-                "start_datetime": _fmt_datetime(base),
-                "start_label": _label(base),
-                "end_date": _fmt(end),
-                "end_datetime": _fmt_datetime(end),
-                "end_label": _label(end),
-            }
+            payload = _range_payload(base, 1, (end - base).days + 1)
     except (ValueError, TypeError) as exc:
         parser.exit(2, "日期计算错误：{}\n".format(exc))
 

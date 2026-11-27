@@ -1,16 +1,14 @@
 ---
 name: timus-app-add
-description: Timus 批量添加记录 — 直接填写字段值，或先查后加。
-version: 1.0.0
-agent_created: true
+description: <场景>：把用户输入转成 <目标表> 记录并一次写入。
 ---
 
-# 基础数据批量添加
+# <场景>添加（ADD 模板）
 
-两种意图：①先查 X 表 A 字段、Y 表 B 字段，再添加到 Z 表；②直接填写字段值，不查询。含查询时先用 `timus-app-maintenance` 的 `data_tool.py` 取值，再写入。
+复制本目录后只改 `description`、下面「触发」和「步骤」；其余不动。
 
-参数见 `<skill-dir>/scripts/add_data.py -h`。`--app` 必填，填应用名；同名表分属不同应用时先定应用。多条记录用重复 `--set` 一次调用，不拆多次；记录 ID 自动生成。
+触发：用户说「<说法>」。仅新增；需查询时走脚本（`data_tool.py query`，经 `timus-runtime`），不触发编辑、删除。
+步骤：`data_tool.py resolve|query` 定位 → `point_util.py` / `date_util.py` 换算 → `add_data.py --app A --table T --row "字段=值|..." [--from S --map T=F]` 一次写入。
+通用规则见 `agents/general-timus-expert.md`。
 
-先查后加用 `--copy-from <源表> --where "sys.字段=值" --map "目标字段=源字段"`，脚本内部查源表并追加，返回新 ID，不再分两次调用。
-
-实例技能固化 `--app` / `--table` / `--pack` 时不再传参或定位。必填 / 选填由创建类型技能定义，本技能不推导；通用规则见 `agents/general-timus-expert.md`。
+仅场景需自定义校验时才加脚本，且只组装参数调用 `add_data.py`。

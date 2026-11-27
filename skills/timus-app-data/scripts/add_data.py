@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""基础数据批量添加：直接写入或从源表复制后写入。纯标准库。"""
+"""本地缓存批量添加：直接写入或从源表复制后写入。平台写入须走连接器 MCP。纯标准库。"""
 from __future__ import annotations
 
 import argparse
@@ -7,8 +7,11 @@ import json
 import sys
 from pathlib import Path
 
-from data_tool import append_pack, load_pack, query, resolve_app, resolve_table
-from pack_lib import PackError
+from data_tool import append_pack_unlocked, query  # pyright: ignore[reportMissingImports, reportImplicitRelativeImport]
+from errors import ToolError, emit_error  # pyright: ignore[reportImplicitRelativeImport]
+from pack_lib import (  # pyright: ignore[reportMissingImports, reportImplicitRelativeImport]
+    PackError, load_pack, pack_lock, resolve_app, resolve_table,
+)
 
 DEFAULT_PACK = Path(__file__).resolve().parents[1] / "references" / "timus-team.yaml"
 
@@ -27,7 +30,7 @@ def _parse_rows(items: list[str]) -> list[dict[str, str]]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="批量添加本地基础数据")
+    parser = argparse.ArgumentParser(description="批量添加本地缓存记录（不会写入平台）")
     parser.add_argument("--pack", default=str(DEFAULT_PACK), help="语义包 YAML 路径")
     parser.add_argument("--app", required=True, help="目标应用名")
     parser.add_argument("--table", required=True, help="目标应用下的表")
@@ -49,30 +52,30 @@ def main() -> None:
         parser.error("--where / --map 仅用于 --from")
 
     try:
-        if args.source:
-            pack = load_pack(args.pack, args.app, (args.table, args.source))
-            app = resolve_app(pack, args.app)
-            source = resolve_table(pack, app, args.source)
-            maps: list[tuple[str, str]] = []
-            for raw in args.maps:
-                if "=" not in raw:
-                    raise PackError("--map 格式应为 目标字段=源字段：{}".format(raw))
-                target, field = raw.split("=", 1)
-                maps.append((target.strip(), field.strip()))
-            records = query(pack, app, source, args.where, [name for _, name in maps])
-            if not records:
-                raise PackError("源表 {} 未找到匹配记录".format(source))
-            rows = [
-                {target: record["fields"].get(field, "") for target, field in maps}
-                for record in records
-            ]
-        else:
-            pack = load_pack(args.pack, args.app, (args.table,))
-            rows = _parse_rows(args.items)
-        result = append_pack(args.pack, pack, args.app, args.table, rows)
+        with pack_lock(args.pack):
+            pack = load_pack(args.pack, args.app, (args.table,) if not args.source else (args.table, args.source))
+            if args.source:
+                app = resolve_app(pack, args.app)
+                source = resolve_table(pack, app, args.source)
+                maps: list[tuple[str, str]] = []
+                for raw in args.maps:
+                    if "=" not in raw:
+                        raise PackError("--map 格式应为 目标字段=源字段：{}".format(raw))
+                    target, field = raw.split("=", 1)
+                    maps.append((target.strip(), field.strip()))
+                records = query(pack, app, source, args.where, [name for _, name in maps])
+                if not records:
+                    raise PackError("源表 {} 未找到匹配记录".format(source))
+                rows = [
+                    {target: record["fields"].get(field, "") for target, field in maps}
+                    for record in records
+                ]
+            else:
+                rows = _parse_rows(args.items)
+            result = append_pack_unlocked(args.pack, pack, args.app, args.table, rows)
         print(json.dumps(result, ensure_ascii=False, indent=2))
-    except (PackError, OSError) as err:
-        print("参数错误：{}".format(err), file=sys.stderr)
+    except (ToolError, OSError) as err:
+        emit_error(err)
         sys.exit(2)
 
 

@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "timus-runtime": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "timus-runtime-mcp@1.3.0"],
+      "env": {
+        "API_BASE_URL": "${API_BASE_URL}",
+        "CLIENT_TOKEN": "${CLIENT_TOKEN}"
+      },
+      "runtime": {
+        "type": "node",
+        "version": ">=18.0.0"
+      },
+      "npmRegistry": "https://registry.npmjs.org",
+      "timeout": 60000
+    }
+  }
+}

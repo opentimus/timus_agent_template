@@ -1,0 +1,21 @@
+{
+  "name": "Timus Runtime",
+  "name_zh": "Timus Runtime 组织元数据",
+  "name_en": "Timus Runtime",
+  "description": "读写 Timus Runtime 组织元数据：查询、新增、修改、删除与查看详情。",
+  "description_zh": "读写 Timus Runtime 组织元数据：查询、新增、修改、删除与查看详情。",
+  "description_en": "Read and write Timus Runtime organization metadata: query, create, update, delete, view detail.",
+  "source": "timus-runtime",
+  "type": "mcp",
+  "auth_mode": "token",
+  "version": "1.3.0",
+  "minWorkbuddyVersion": "5.0.0",
+  "examples_zh": [
+    "在 03.SPMP.TIMUS 组织客户表新增记录：客户「远景科技」，联系方式「010-88886666」",
+    "列出 03.SPMP.TIMUS 组织项目表中状态为「进行中」的项目"
+  ],
+  "examples_en": [
+    "Add a customer record 'Yuanjing Tech' with phone '010-88886666'",
+    "List projects with status 'in progress'"
+  ]
+}

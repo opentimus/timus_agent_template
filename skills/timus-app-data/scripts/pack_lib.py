@@ -1,17 +1,27 @@
 """语义包解析与写回：单文件含表头元数据与本地记录；受限 YAML（2 空格缩进，无列表 / 锚点）。"""
 from __future__ import annotations
 
+import os
+import tempfile
 from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from errors import ToolError
+
+try:
+    import fcntl
+except ImportError:  # 非 Unix 平台退化为无锁写
+    fcntl = None  # type: ignore[assignment]
+
 SECTION_KEYS = ("apps",)
-APP_KEYS = ("language", "tables", "fields", "records")
+APP_KEYS = ("language", "team_code", "tables", "fields", "records")
 VALID_TYPES = ("AutoNumber", "CreatedTime", "Lookup", "User", "Formula", "Text", "Number", "SingleSelect", "DateTime")
-PACK_HEADER = "# 语义包：apps → 应用名 → language / tables / fields / records；表、字段、记录用稳定 ID，platform[language] 供请求。"
+PACK_HEADER = "# 语义包：apps → 应用名 → team_code / language / tables / fields / records；team_code 为连接器组织编码，platform[language] 供平台请求。"
 
 
-class PackError(Exception):
+class PackError(ToolError):
     """语义包格式不合法。"""
 
 
@@ -37,9 +47,47 @@ def unquote(value: str) -> str:
 
 def quote(value: str) -> str:
     text = str(value)
-    if "#" in text or '"' in text or "'" in text:
-        raise PackError("值不能包含 # 或引号：{}".format(text))
+    if "#" in text or '"' in text or "'" in text or "," in text or "}" in text:
+        raise PackError("值不能包含 # / 引号 / 逗号 / 右花括号：{}".format(text))
     return '"{}"'.format(text)
+
+
+def atomic_write(path: str, text: str) -> None:
+    """同目录临时文件 + fsync + 原子替换，避免中断写坏语义包。"""
+    file = Path(path).expanduser().resolve()
+    fd, temp = tempfile.mkstemp(prefix=file.name + ".", suffix=".tmp", dir=str(file.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp, file)
+        try:
+            dir_fd = os.open(str(file.parent), os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except OSError:
+            pass  # 非 Unix 文件系统不支持目录 fsync 时退化为仅文件 fsync
+    finally:
+        if os.path.exists(temp):
+            os.unlink(temp)
+
+
+@contextmanager
+def pack_lock(path: str) -> Iterator[None]:
+    """同 pack 的读-改-写串行化；非 Unix 平台退化为无锁。"""
+    file = Path(path).expanduser().resolve()
+    handle = file.with_name(file.name + ".lock").open("a+", encoding="utf-8")
+    try:
+        if fcntl is not None:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        yield
+    finally:
+        if fcntl is not None:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        handle.close()
 
 
 def split_pair(line: str, lineno: int) -> tuple[str, str]:
@@ -180,11 +228,11 @@ def load_pack(path: str, target_app: str = "", target_tables: tuple[str, ...] = 
                     raise PackError("第 {} 行应用名 {} 不应带值".format(s.lineno, s.key))
                 if s.key in apps:
                     raise PackError("第 {} 行重复应用：{}".format(s.lineno, s.key))
-                apps[s.key] = {"language": "", "tables": {}, "fields": {}, "records": {}}
-            elif s.indent == 4 and s.subsection == "language":
+                apps[s.key] = {"language": "", "team_code": "", "tables": {}, "fields": {}, "records": {}}
+            elif s.indent == 4 and s.subsection in ("language", "team_code"):
                 if not s.value:
-                    raise PackError("第 {} 行应用 {} 缺少 language".format(s.lineno, s.app))
-                apps[s.app]["language"] = s.value
+                    raise PackError("第 {} 行应用 {} 缺少 {}".format(s.lineno, s.app, s.subsection))
+                apps[s.app][s.subsection] = s.value
             elif s.indent == 6 and s.subsection in ("tables", "fields", "records"):
                 container = apps[s.app][s.subsection]
                 if s.key in container:
@@ -229,6 +277,8 @@ def load_pack(path: str, target_app: str = "", target_tables: tuple[str, ...] = 
         language = str(item["language"] or "")
         if not language:
             raise PackError("应用 {} 缺少 language".format(app))
+        if not str(item.get("team_code") or ""):
+            raise PackError("应用 {} 缺少 team_code（连接器组织编码）".format(app))
         tables = item["tables"]
         fields = item["fields"]
         records = item["records"]
@@ -274,6 +324,7 @@ def dump_pack(pack: dict[str, Any]) -> str:
     ]
     for app, item in pack["apps"].items():
         lines.append("  {}:".format(app))
+        lines.append("    team_code: {}".format(quote(item["team_code"])))
         lines.append("    language: {}".format(quote(item["language"])))
         for section in ("tables", "fields", "records"):
             lines.append("    {}:".format(section))

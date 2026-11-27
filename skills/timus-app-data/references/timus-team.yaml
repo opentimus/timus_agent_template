@@ -1,10 +1,11 @@
-# 语义包：apps → 应用名 → language / tables / fields / records；表、字段、记录用稳定 ID，platform[language] 供请求。
+# 语义包：apps → 应用名 → team_code / language / tables / fields / records；team_code 为连接器组织编码，platform[language] 供平台请求。
 
 schema_version: "1.0.0"
 connector: timus-runtime
 
 apps:
   TODO_APP_A:
+    team_code: TODO_TEAM_CODE_A
     language: en
     tables:
       member:
@@ -75,6 +76,7 @@ apps:
           sys.user: "on_00000000000000000000000000000005"
       task:
   TODO_APP_B:
+    team_code: TODO_TEAM_CODE_B
     language: zh
     tables:
       customer:

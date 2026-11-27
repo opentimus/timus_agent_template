@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Timus Runtime">
+  <rect x="0" y="0" width="64" height="64" rx="14" fill="#0B1230"/>
+  <g fill="none" stroke="#0F5EFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="12" y="13" width="40" height="12" rx="3"/>
+    <rect x="12" y="29" width="40" height="12" rx="3" opacity="0.75"/>
+    <rect x="12" y="45" width="22" height="8" rx="3" opacity="0.5"/>
+  </g>
+  <circle cx="47" cy="49" r="5" fill="#4DA3FF"/>
+</svg>

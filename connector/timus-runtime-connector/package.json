@@ -1,0 +1,25 @@
+{
+  "name": "timus-runtime-mcp",
+  "version": "1.3.0",
+  "description": "MCP stdio server for Timus Runtime low-code tables (connect via WorkBuddy Connector).",
+  "bin": {
+    "timus-runtime-mcp": "server.js"
+  },
+  "files": [
+    "server.js"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "pack:connector": "node scripts/pack-connector.mjs",
+    "check": "node scripts/pack-connector.mjs --check-only",
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": [
+    "mcp",
+    "timus",
+    "lowcode"
+  ],
+  "license": "Apache-2.0"
+}

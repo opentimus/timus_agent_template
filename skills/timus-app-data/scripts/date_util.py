@@ -5,7 +5,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import date, datetime, timedelta
+
+from errors import DateError, ToolError, emit_error
 
 WEEKDAY_CN = ("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 
@@ -33,7 +36,7 @@ def _day_fields(day: date) -> dict[str, str]:
 
 def _nth_day(base: date, n: int) -> date:
     if n < 1:
-        raise ValueError("天数必须 >= 1，收到 {}".format(n))
+        raise DateError("天数必须 >= 1，收到 {}".format(n))
     return base + timedelta(days=n - 1)
 
 
@@ -54,7 +57,7 @@ def _range_payload(base: date, start_day: int, end_day: int) -> dict[str, object
     start = _nth_day(base, start_day)
     end = _nth_day(base, end_day)
     if end < start:
-        raise ValueError(
+        raise DateError(
             "结束日期 {} 早于开始日期 {}，请核对第几天开始/结束".format(_fmt(end), _fmt(start))
         )
     payload: dict[str, object] = {"start_day": start_day, "end_day": end_day}
@@ -69,13 +72,13 @@ def _parse_task(raw: str) -> tuple[str, int, int]:
     """解析 --task '任务名|开始天|结束天'，以竖线分隔，任务名不可含竖线。"""
     parts = raw.split("|")
     if len(parts) != 3 or not parts[0].strip():
-        raise ValueError("--task 格式应为 '任务名|开始天|结束天'，收到：{}".format(raw))
+        raise DateError("--task 格式应为 '任务名|开始天|结束天'，收到：{}".format(raw))
     name = parts[0].strip()
     try:
         start_day = int(parts[1])
         end_day = int(parts[2])
     except ValueError:
-        raise ValueError("--task 的开始天/结束天必须是整数，收到：{}".format(raw))
+        raise DateError("--task 的开始天/结束天必须是整数，收到：{}".format(raw))
     return name, start_day, end_day
 
 
@@ -105,13 +108,13 @@ def main() -> None:
     try:
         if args.command == "options":
             base = _parse_day(args.base) if args.base else date.today()
-            if args.count < 1:
-                raise ValueError("选项数量必须 >= 1")
+            if not 1 <= args.count <= 365:
+                raise DateError("选项数量须在 1..365 之间")
             payload: object = _options(base, args.count)
         elif args.command == "batch":
             base = _parse_day(args.start_date)
             if not args.task:
-                raise ValueError("batch 至少传入一条 --task")
+                raise DateError("batch 至少传入一条 --task")
             items: list[dict[str, object]] = []
             for raw in args.task:
                 name, start_day, end_day = _parse_task(raw)
@@ -123,12 +126,13 @@ def main() -> None:
             base = _parse_day(args.base) if args.base else date.today()
             end = _parse_day(args.end_date)
             if end < base:
-                raise ValueError(
+                raise DateError(
                     "完成日期 {} 早于开始日期 {}，请重新选择完成时间".format(_fmt(end), _fmt(base))
                 )
             payload = _range_payload(base, 1, (end - base).days + 1)
-    except (ValueError, TypeError) as exc:
-        parser.exit(2, "日期计算错误：{}\n".format(exc))
+    except (ToolError, ValueError, TypeError) as exc:
+        emit_error(exc, "日期计算错误")
+        sys.exit(2)
 
     print(json.dumps(payload, ensure_ascii=False, indent=2))
 

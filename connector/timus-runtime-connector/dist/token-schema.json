@@ -1,0 +1,30 @@
+{
+  "title": "Timus Runtime 服务配置",
+  "title_en": "Timus Runtime Configuration",
+  "description": "填写 Timus Runtime 的服务地址与访问令牌。凭证仅保存在本机 ~/.workbuddy 目录，只注入本连接器的 MCP 进程，不会上传到服务器。",
+  "description_en": "Provide your Timus Runtime base URL and access token. Credentials are stored locally under ~/.workbuddy and injected only into this connector's MCP process.",
+  "docUrl": "https://open.workbuddy.cn/docs/connector",
+  "docLabel": "查看连接器使用说明",
+  "fields": [
+    {
+      "key": "API_BASE_URL",
+      "label": "服务地址",
+      "label_en": "Base URL",
+      "type": "text",
+      "required": true,
+      "placeholder": "https://your-domain.com",
+      "description": "Timus Runtime 的服务地址（协议 + 域名，不带结尾斜杠，也不要带 /api 路径）",
+      "description_en": "Timus Runtime base URL (scheme + host, no trailing slash, no /api path)"
+    },
+    {
+      "key": "CLIENT_TOKEN",
+      "label": "访问令牌",
+      "label_en": "Access Token",
+      "type": "password",
+      "required": true,
+      "placeholder": "无需填写 Bearer 前缀",
+      "description": "请求头 Authorization 中 Bearer 之后的访问令牌",
+      "description_en": "Access token placed after Bearer in the Authorization header"
+    }
+  ]
+}

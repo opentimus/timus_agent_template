@@ -10,12 +10,14 @@ import sys
 import time
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
+from errors import ToolError, emit_error
+
 CENT = Decimal("0.01")
 # 点数原始输入的合法形态：正数，可带小数；不接受正负号、科学计数法。
 RAW_PATTERN = re.compile(r"\d+(?:\.\d+)?|\.\d+")
 
 
-class PointError(Exception):
+class PointError(ToolError):
     """点数口径或拆分参数不合法。"""
 
 
@@ -81,8 +83,15 @@ def split(total: str, weights: list[str]) -> dict[str, object]:
     return {"total": "{:.2f}".format(total_cents), "items": items}
 
 
+_last_stamp = 0
+
+
 def _stamp(prefix: str) -> tuple[str, int]:
-    return _check_prefix(prefix), int(time.time() * 1000)
+    """毫秒 + 进程内单调递增，避免同毫秒重复流水号。"""
+    global _last_stamp
+    name = _check_prefix(prefix)
+    _last_stamp = max(int(time.time() * 1000), _last_stamp + 1)
+    return name, _last_stamp
 
 
 def next_pair(prefix: str) -> dict[str, str]:
@@ -137,7 +146,7 @@ def main() -> None:
         else:
             payload = next_batch(args.prefix, args.count)
     except PointError as err:
-        print("点数口径错误：{}".format(err), file=sys.stderr)
+        emit_error(err, "点数口径错误")
         sys.exit(2)
 
     print(json.dumps(payload, ensure_ascii=False, indent=2))

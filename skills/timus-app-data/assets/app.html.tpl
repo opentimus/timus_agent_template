@@ -79,7 +79,7 @@
 
 <div class="bar">
   <span class="summary" id="barSummary"></span>
-  <button class="primary" id="btnExport">提交</button>
+  <button class="primary" id="btnExport">导出待提交数据</button>
   <button class="ghost" id="btnClose">关闭</button>
 </div>
 
@@ -103,7 +103,7 @@ function render() {
       const value = row[c.key] ?? "";
       return DATA.editable
         ? '<td><input type="text" data-i="' + i + '" data-k="' + esc(c.key) + '" value="' + esc(value) + '"></td>'
-        : '<td class="' + (c.className || "") + '">' + esc(value || "—") + "</td>";
+        : '<td class="' + esc(c.className || "") + '">' + esc(value || "—") + "</td>";
     }).join("") + "</tr>"
   ).join("") : '<tr><td colspan="' + (COLS.length + 1) + '" style="text-align:center;color:var(--hint);padding:30px">暂无数据</td></tr>';
   $("barSummary").innerHTML = "共 <b>" + rows.length + "</b> 条" + (DATA.editable ? " · 可直接编辑" : "");
@@ -126,11 +126,10 @@ $("tbody").addEventListener("input", event => {
   rows[+input.dataset.i][input.dataset.k] = input.value;
 });
 $("btnExport").onclick = () => {
-  const data = payload();
-  if (typeof window.timusAdd === "function") { window.timusAdd(data); return; }
   exportJson();
+  $("barSummary").textContent = "以下为待提交数据（未写入平台），写入须由助手调用连接器 MCP";
 };
-$("btnClose").onclick = () => window.close();
+$("btnClose").onclick = () => { window.close(); $("barSummary").textContent = "请在宿主窗口中关闭本页"; };
 render();
 </script>
 </body>

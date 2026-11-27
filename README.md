@@ -4,13 +4,17 @@
 
 技能按 `应用-表-动作` 命名，例如 `todo-member-add`；实例技能在宿主层直接映射到脚本，固化 `--app` / `--table` / `--pack`，不读 `SKILL.md`。模板保留 `timus-app-*` 通用名。
 
+实例技能可预置类型枚举 / 常用候选，命中直接用，不弹 `AskUserQuestion`。
+
+表和字段用稳定英文 ID；每个应用独立配置 `language`，`tables` / `fields` 自带 `platform[language]`，本地记录用稳定 ID。
+
 `type_policy` 仅为字段默认策略；用户可手动调整字段的 `@策略`，以最终配置为准。
 
 ## 权威源
 
 | 主题 | 权威源 |
 | --- | --- |
-| 字段 / 类型 / 可写性 / 本地记录 | `skills/timus-app-maintenance/references/timus-team.yaml` |
+| 稳定表 / 字段 ID / 类型 / 可写性 / 平台映射 / 本地记录 | `skills/timus-app-maintenance/references/timus-team.yaml` |
 | 意图路由与定位 | `skills/timus-app-maintenance/references/intent-routing.md` |
 | 脚本命令与返回约定 | `skills/timus-app-maintenance/SKILL.md` |
 | 脚本参数 | 各脚本 `-h` |

@@ -1,9 +1,8 @@
-# 语义包：表头元数据 + 本地记录。换应用时改 apps 下的应用名（即 app_name）/ tables / fields；tbl... 仅追溯。
-# 层级：apps → 应用名(app_name) → tables + fields + records；字段写作 类型@策略，省略策略取 type_policy 默认；records 下为 表 → 记录 ID → 字段: 值，User 字段值为 open_id。
+# 语义包：表头元数据 + 本地记录。换应用时改 apps 下应用名 / language / tables / fields；tbl... 仅追溯。
+# 层级：apps → 应用名(app_name) → language + tables + fields + records；tables / fields / records 用稳定 ID，tables.<表>.platform[language] 与 fields.<表>.<字段>.platform[language] 用于请求。
 
 schema_version: "1.0.0"
 connector: timus-runtime
-synced_at: "2026-11-26 15:44:53"
 
 type_policy:
   AutoNumber: read_only
@@ -18,69 +17,123 @@ type_policy:
 
 apps:
   TODO_APP_A:
+    language: en
     tables:
-      团队成员: tblDemoMember00001
-      成员任务: tblDemoTask000002
+      member:
+        id: tblDemoMember00001
+        platform: {zh: 团队成员, en: member}
+      task:
+        id: tblDemoTask000002
+        platform: {zh: 成员任务, en: task}
     fields:
-      团队成员:
-        S.成员ID: AutoNumber@read_only
-        S.成员: Text@writable
-        S.角色: SingleSelect@writable
-        S.用户: User@writable
-        S.创建时间: CreatedTime@read_only
-      成员任务:
-        S.任务ID: AutoNumber@read_only
-        S.任务名: Text@writable
-        S.负责人: User@writable
-        S.点数: Number@writable
-        S.截止时间: DateTime@writable
+      member:
+        sys.member_id:
+          type: AutoNumber@read_only
+          platform: {zh: S.成员ID, en: sys.member_id}
+        sys.member_name:
+          type: Text@writable
+          platform: {zh: S.成员, en: sys.member_name}
+        sys.role:
+          type: SingleSelect@writable
+          platform: {zh: S.角色, en: sys.role}
+        sys.user:
+          type: User@writable
+          platform: {zh: S.用户, en: sys.user}
+        sys.created_at:
+          type: CreatedTime@read_only
+          platform: {zh: S.创建时间, en: sys.created_at}
+      task:
+        sys.task_id:
+          type: AutoNumber@read_only
+          platform: {zh: S.任务ID, en: sys.task_id}
+        sys.task_name:
+          type: Text@writable
+          platform: {zh: S.任务名, en: sys.task_name}
+        sys.assignee:
+          type: User@writable
+          platform: {zh: S.负责人, en: sys.assignee}
+        sys.points:
+          type: Number@writable
+          platform: {zh: S.点数, en: sys.points}
+        sys.due_at:
+          type: DateTime@writable
+          platform: {zh: S.截止时间, en: sys.due_at}
     records:
-      团队成员:
+      member:
         reczz28bx2V8LHcd:
-          S.成员ID: TCF-001
-          S.成员: 左左
-          S.角色: 财务
-          S.用户: "on_00000000000000000000000000000001"
+          sys.member_id: TCF-001
+          sys.member_name: 左左
+          sys.role: 财务
+          sys.user: "on_00000000000000000000000000000001"
         reczz28bx2V8PfnY:
-          S.成员ID: TCF-002
-          S.成员: Barry
-          S.角色: 质量
-          S.用户: "on_00000000000000000000000000000002"
+          sys.member_id: TCF-002
+          sys.member_name: Barry
+          sys.role: 质量
+          sys.user: "on_00000000000000000000000000000002"
         reczz28bx2V8Sb29:
-          S.成员ID: TCF-003
-          S.成员: 飞书用户1446NF
-          S.角色: 客服
-          S.用户: "on_00000000000000000000000000000003"
+          sys.member_id: TCF-003
+          sys.member_name: 飞书用户1446NF
+          sys.role: 客服
+          sys.user: "on_00000000000000000000000000000003"
         reczz28bx2V8QIIp:
-          S.成员ID: TCF-004
-          S.成员: 王臻
-          S.角色: 商务
-          S.用户: "on_00000000000000000000000000000004"
+          sys.member_id: TCF-004
+          sys.member_name: 王臻
+          sys.role: 商务
+          sys.user: "on_00000000000000000000000000000004"
         reczz28bx2V8PRQ3:
-          S.成员ID: TCF-005
-          S.成员: 蒋彦博
-          S.角色: 咨询
-          S.用户: "on_00000000000000000000000000000005"
-      成员任务:
+          sys.member_id: TCF-005
+          sys.member_name: 蒋彦博
+          sys.role: 咨询
+          sys.user: "on_00000000000000000000000000000005"
+      task:
   TODO_APP_B:
+    language: zh
     tables:
-      客户: tblDemoCustomer0001
-      订单: tblDemoOrder000002
+      customer:
+        id: tblDemoCustomer0001
+        platform: {zh: 客户, en: customer}
+      order:
+        id: tblDemoOrder000002
+        platform: {zh: 订单, en: order}
     fields:
-      客户:
-        S.客户ID: AutoNumber@read_only
-        S.客户: Text@writable
-        S.联系方式: Text@writable
-        S.状态: SingleSelect@writable
-        S.备注: Text@writable
-      订单:
-        S.订单号: Text@writable
-        S.客户ID: Text@writable
-        S.客户: Lookup@read_only
-        S.金额: Number@writable
-        S.下单时间: DateTime@writable
-        S.状态: SingleSelect@writable
-        S.备注: Text@writable
+      customer:
+        sys.customer_id:
+          type: AutoNumber@read_only
+          platform: {zh: S.客户ID, en: sys.customer_id}
+        sys.customer_name:
+          type: Text@writable
+          platform: {zh: S.客户, en: sys.customer_name}
+        sys.contact:
+          type: Text@writable
+          platform: {zh: S.联系方式, en: sys.contact}
+        sys.status:
+          type: SingleSelect@writable
+          platform: {zh: S.状态, en: sys.status}
+        sys.remark:
+          type: Text@writable
+          platform: {zh: S.备注, en: sys.remark}
+      order:
+        sys.order_no:
+          type: Text@writable
+          platform: {zh: S.订单号, en: sys.order_no}
+        sys.customer_id:
+          type: Text@writable
+          platform: {zh: S.客户ID, en: sys.customer_id}
+        sys.customer:
+          type: Lookup@read_only
+          platform: {zh: S.客户, en: sys.customer}
+        sys.amount:
+          type: Number@writable
+          platform: {zh: S.金额, en: sys.amount}
+        sys.ordered_at:
+          type: DateTime@writable
+          platform: {zh: S.下单时间, en: sys.ordered_at}
+        sys.status:
+          type: SingleSelect@writable
+          platform: {zh: S.状态, en: sys.status}
+        sys.remark:
+          type: Text@writable
+          platform: {zh: S.备注, en: sys.remark}
     records:
-      客户:
-      订单:
+      customer:
+      order:

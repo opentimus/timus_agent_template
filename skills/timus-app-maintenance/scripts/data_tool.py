@@ -10,7 +10,8 @@ from pathlib import Path
 from typing import cast
 
 from pack_lib import (  # pyright: ignore[reportMissingImports]
-    PackError as DataError, iter_lines, list_fields, load_pack, resolve_app, resolve_table, unquote,
+    PackError as DataError, iter_lines, list_fields, load_pack, platform_field, platform_table,
+    resolve_app, resolve_field, resolve_table, unquote,
 )
 
 SKILL = Path(__file__).resolve().parents[1]
@@ -159,9 +160,12 @@ def _data_insert_position(lines: list[str], app: str, table: str) -> int:
     return position
 
 
-def append(path: str, app: str, table: str, items: list[str]) -> dict[str, object]:
+def append(path: str, app: str, table: str, items: list[str], extra_tables: tuple[str, ...] = ()) -> dict[str, object]:
     """向指定应用的表追加记录；字段须在该应用表头元数据中存在，记录 ID 自动生成。"""
-    pack = load_pack(path)
+    return append_pack(path, load_pack(path, app, (table, *extra_tables)), app, table, items)
+
+
+def append_pack(path: str, pack: dict[str, object], app: str, table: str, items: list[str]) -> dict[str, object]:
     a = resolve_app(pack, app)
     t = resolve_table(pack, a, table)
     _ensure_writable(a)
@@ -220,12 +224,30 @@ def main() -> None:
     parser.add_argument("--fields", action="append", nargs="+", default=[], metavar="字段", help="返回字段，可多值 / 重复")
     parser.add_argument("--set", dest="sets", action="append", nargs="+", default=[], metavar="字段=值", help="改字段，可多值 / 重复")
     parser.add_argument("--delete", action="store_true", help="删除指定记录")
+    parser.add_argument("--resolve-field", metavar="字段词", help="解析为稳定字段 ID 与当前语种平台字段")
+    parser.add_argument("--resolve-table", metavar="表词", help="解析为稳定表 ID 与当前语种平台表")
     args = parser.parse_args()
     fields = [name for group in args.fields for name in group]
     sets = [item for group in args.sets for item in group]
 
     try:
-        pack = load_pack(args.pack)
+        pack = load_pack(args.pack, args.app, (args.table,) if args.table else ())
+        if args.resolve_table:
+            if not args.app:
+                raise DataError("--resolve-table 需要 --app")
+            a = resolve_app(pack, args.app)
+            t = resolve_table(pack, a, args.resolve_table)
+            print(json.dumps({"app": a, "table": t, "platform": platform_table(pack, a, t)}, ensure_ascii=False, indent=2))
+            return
+        if args.resolve_field:
+            if not args.app or not args.table:
+                raise DataError("--resolve-field 需要 --app 与 --table")
+            a = resolve_app(pack, args.app)
+            t = resolve_table(pack, a, args.table)
+            field = resolve_field(pack, a, t, args.resolve_field)
+            print(json.dumps({"app": a, "table": t, "field": field,
+                              "platform": platform_field(pack, a, t, field)}, ensure_ascii=False, indent=2))
+            return
         if args.list_apps:
             if args.app or args.table or args.where or fields or sets or args.delete:
                 raise DataError("--list-apps 不能与其它操作参数同时使用")
